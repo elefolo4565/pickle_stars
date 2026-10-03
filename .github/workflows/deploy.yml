@@ -1,0 +1,79 @@
+# main への push でさくらVPS へ自動デプロイする。
+# 手順と必要な Secrets は deploy/README.md を参照。
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      DEPLOY_PATH: /opt/pickle-stars
+      SERVICE: pickle-stars
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+
+      - name: SSH の準備
+        env:
+          SSH_PRIVATE_KEY: ${{ secrets.SSH_PRIVATE_KEY }}
+          SSH_KNOWN_HOSTS: ${{ secrets.SSH_KNOWN_HOSTS }}
+          SSH_HOST: ${{ secrets.SSH_HOST }}
+          SSH_USER: ${{ secrets.SSH_USER }}
+          SSH_PORT: ${{ secrets.SSH_PORT }}
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$SSH_PRIVATE_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName $SSH_HOST
+            User $SSH_USER
+            Port ${SSH_PORT:-22}
+            IdentityFile ~/.ssh/deploy_key
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+          EOF
+
+      - name: ファイルを転送
+        run: |
+          rsync -az --delete \
+            --exclude '.git/' \
+            --exclude '.github/' \
+            --exclude 'node_modules/' \
+            ./ "vps:$DEPLOY_PATH/"
+
+      - name: 依存関係の更新と再起動
+        run: |
+          ssh vps "set -e
+            cd '$DEPLOY_PATH'
+            npm ci --omit=dev --no-audit --no-fund
+            sudo /usr/bin/systemctl restart $SERVICE
+            for i in \$(seq 1 15); do
+              if curl -fsS http://127.0.0.1:3000/healthz; then echo; exit 0; fi
+              sleep 1
+            done
+            echo 'ゲームサーバーが起動しませんでした' >&2
+            journalctl -u $SERVICE -n 50 --no-pager || true
+            exit 1"
