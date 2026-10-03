@@ -114,7 +114,7 @@ export class Room {
         break;
       case 'hit': {
         if (!SHOTS.has(msg.s)) return;
-        const err = m.hit(idx, +msg.k, msg.s, +msg.ax, +msg.ay, +msg.x, +msg.z);
+        const err = m.hit(idx, +msg.k, msg.s, +msg.ax, +msg.ay, +msg.x, +msg.z, !!msg.dv);
         if (err) this.members[idx]?.send({ t: 'hitNo', q: msg.q, reason: err });
         else this.broadcast(m.snapshot());
         break;

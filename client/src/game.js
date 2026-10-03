@@ -4,13 +4,13 @@
 // - 自分の打球はローカルで即座に反映し、サーバーがラグ補償つきで検証する
 import * as THREE from 'three';
 import {
-  SHOT, DT, DT_MS, MOVE_SPEED, MOVE_ACCEL, SWING_WINDOW, KITCHEN, forwardSign,
+  SHOT, DT, DT_MS, MOVE_SPEED, MOVE_ACCEL, SWING_WINDOW, KITCHEN, DIVE_RECOVER, forwardSign, sideOf,
 } from '@shared/constants.js';
 import {
-  cloneRally, stepRally, hitBlockReason, applyHit, contactQuality, predictBounce,
+  cloneRally, stepRally, hitBlockReason, applyHit, contactQuality, predictBounce, inCourt,
 } from '@shared/rally.js';
 import { clampPlayer } from '@shared/match.js';
-import { rightSign } from '@shared/shot.js';
+import { rightSign, aimPoint } from '@shared/shot.js';
 import { Chibi } from './characters.js';
 import { makeBlob, makeRing } from './scene.js';
 import { sfx } from './audio.js';
@@ -23,6 +23,15 @@ const HOLD_MAX_MS = 1200;
 /** キャラクターモデルの向き (モデルは +z が正面) */
 function baseRot(idx) {
   return idx === 0 ? Math.PI : 0;
+}
+
+/** 飛びつく向き (ボールに向かって最大 1.2m) */
+function diveVec(ball, px, pz) {
+  const dx = ball[0] - px;
+  const dz = ball[2] - pz;
+  const d = Math.hypot(dx, dz) || 1;
+  const k = Math.min(1.2, Math.max(0, d - 0.6)) / d;
+  return [dx * k, dz * k];
 }
 
 function swingKind(idx, ball, px) {
@@ -65,8 +74,13 @@ export class GameSession {
     });
     scene.setViewSide(this.you);
     scene.kitchenGlow.position.z = -forwardSign(this.you) * KITCHEN / 2;
+    // 狙いマーカー (今の入力で打ったときの着地点)
+    this.aimMark = makeRing(0.8, 0x39a7ff);
+    this.aimMark.visible = false;
+    scene.scene.add(this.aimMark);
+    this.objects.push(this.aimMark);
 
-    this.me = { x: 0, z: 0, vx: 0, vz: 0, ry: 0, rs: -1 };
+    this.me = { x: 0, z: 0, vx: 0, vz: 0, ry: 0, rs: -1, recoverUntil: 0 };
     this.remote = { x: 0, z: 0, ry: 0, speed: 0, rs: -1 };
     this.remoteBuf = [];
     this.phase = 'serve';
@@ -214,7 +228,13 @@ export class GameSession {
       case 'hit':
         if (e.by === this.opp) {
           const ball = this.sim ? this.sim.rally.p : [0, 1, 0];
-          this.chars[this.opp].strike(e.kind === 'serve' ? 'serve' : swingKind(this.opp, ball, this.remote.x));
+          const kind = e.kind === 'serve' ? 'serve' : swingKind(this.opp, ball, this.remote.x);
+          if (e.kind === 'dive') {
+            const [wx, wz] = diveVec(ball, this.remote.x, this.remote.z);
+            this.chars[this.opp].dive(wx, wz, kind);
+          } else {
+            this.chars[this.opp].strike(kind);
+          }
           sfx.hit(e.kind, e.q);
         } else if (e.kind === 'serve') {
           sfx.hit('serve', 1);
@@ -248,6 +268,7 @@ export class GameSession {
         this.remote.rs = po.rs;
         this.serveSentAt = -1e9;
         this.swingWin = null;
+        this.me.recoverUntil = 0;
         const ss = this.score[e.server];
         const rs = this.score[1 - e.server];
         const call = `${ss} - ${rs}`;
@@ -287,8 +308,8 @@ export class GameSession {
   }
 
   /** 構える (この間にボールが打点に来たら打つ) */
-  startSwing(shot, now) {
-    this.swingWin = { shot, until: now + SWING_WINDOW * 1000, maxUntil: now + HOLD_MAX_MS };
+  startSwing(shot, now, auto = false) {
+    this.swingWin = { shot, until: now + SWING_WINDOW * 1000, maxUntil: now + HOLD_MAX_MS, auto };
     this.conn.send({ t: 'sw', s: shot });
     const ball = this.sim ? this.sim.rally.p : [this.me.x, 1, this.me.z];
     this.chars[this.you].ready(swingKind(this.you, ball, this.me.x));
@@ -298,21 +319,34 @@ export class GameSession {
   checkHit() {
     // オート打ち返し: 構えていなくても、打てる位置にボールが来たら最後に押したショットで構える
     if (!this.swingWin && this.input.autoHit && !this.over && this.phase === 'rally' && this.sim
-      && !hitBlockReason(this.sim.rally, this.you, this.me.x, this.me.z)) {
-      this.startSwing(this.input.autoShot || SHOT.DRIVE, performance.now());
+      && performance.now() >= this.me.recoverUntil) {
+      const r = this.sim.rally;
+      const { x, z } = this.me;
+      if (!hitBlockReason(r, this.you, x, z) || (this.diveNow(r) && !this.goingOut(r))) {
+        this.startSwing(this.input.autoShot || SHOT.DRIVE, performance.now(), true);
+      }
     }
     const sw = this.swingWin;
     if (!sw || this.phase !== 'rally' || !this.sim) return;
+    if (performance.now() < this.me.recoverUntil) return;
     const r = this.sim.rally;
     const me = this.me;
-    const reason = hitBlockReason(r, this.you, me.x, me.z);
+    let reason = hitBlockReason(r, this.you, me.x, me.z);
+    let dive = false;
+    if (reason === 'reach' && !hitBlockReason(r, this.you, me.x, me.z, true)) {
+      // 普通には届かない球: 飛びつけば届く範囲から出ていく直前まで待ってから飛びつく
+      if (!this.diveNow(r)) return;
+      if (sw.auto && this.goingOut(r)) return;
+      dive = true;
+      reason = null;
+    }
     if ((reason === 'twobounce' || reason === 'kitchen') && this.hintSeq !== r.seq) {
       this.hintSeq = r.seq;
       this.hud.feedback(reason === 'twobounce' ? 'ツーバウンドルール! 1回バウンドさせよう' : 'キッチンではボレーできない!', 'warn');
     }
     if (reason) return;
     const q = contactQuality(r, me.x, me.z);
-    if (q < 0.97) {
+    if (!dive && q < 0.97) {
       // 次の tick の方が良い打点なら待つ
       const nxt = cloneRally(r);
       stepRally(nxt);
@@ -320,14 +354,22 @@ export class GameSession {
     }
     const aim = this.input.getMove();
     const kind = swingKind(this.you, r.p, me.x);
-    const res = applyHit(r, this.you, sw.shot, aim.x, aim.y, me.x, me.z);
+    const [wx, wz] = diveVec(r.p, me.x, me.z);
+    const res = applyHit(r, this.you, sw.shot, aim.x, aim.y, me.x, me.z, dive);
     this.conn.send({
-      t: 'hit', k: this.sim.tick, s: sw.shot, ax: aim.x, ay: aim.y, x: me.x, z: me.z, q: r.seq,
+      t: 'hit', k: this.sim.tick, s: sw.shot, ax: aim.x, ay: aim.y, x: me.x, z: me.z, q: r.seq, dv: dive ? 1 : 0,
     });
     this.pendingHit = { seq: r.seq, until: performance.now() + 700 };
     this.swingWin = null;
-    this.chars[this.you].strike(kind);
     sfx.hit(res.kind, res.quality);
+    if (dive) {
+      this.chars[this.you].dive(wx, wz, kind);
+      me.recoverUntil = performance.now() + DIVE_RECOVER * 1000;
+      me.vx = me.vz = 0;
+      this.hud.feedback('ダイビング!', 'good');
+      return;
+    }
+    this.chars[this.you].strike(kind);
     if (res.kind === 'smash') this.hud.feedback('スマッシュ!', 'good');
     else if (res.quality >= 0.97) this.hud.feedback('ナイスショット!', 'good');
     else if (res.quality < 0.6) this.hud.feedback('打点が悪い…', 'warn');
@@ -343,7 +385,7 @@ export class GameSession {
 
     // 移動
     const mv = input.getMove();
-    const canMove = !this.over && this.phase !== 'gameOver';
+    const canMove = !this.over && this.phase !== 'gameOver' && now >= me.recoverUntil;
     const tvx = canMove ? mv.x * rightSign(this.you) * MOVE_SPEED : 0;
     const tvz = canMove ? mv.y * forwardSign(this.you) * MOVE_SPEED : 0;
     const a = MOVE_ACCEL * dt;
@@ -424,6 +466,32 @@ export class GameSession {
     r.speed += (Math.min(sp, MOVE_SPEED * 1.2) - r.speed) * Math.min(1, dt * 12);
   }
 
+  /** 相手の打球の着地予想 (打球ごとに 1 回だけ計算) */
+  landingOf(r) {
+    const key = `${r.seq}`;
+    if (key !== this.landingKey) {
+      this.landingKey = key;
+      this.landingPos = predictBounce(r);
+    }
+    return this.landingPos;
+  }
+
+  /** 飛びつけば届き、次の tick にはもう届かない (飛びつくなら今) */
+  diveNow(r) {
+    const me = this.me;
+    if (hitBlockReason(r, this.you, me.x, me.z, true)) return false;
+    const nxt = cloneRally(r);
+    stepRally(nxt);
+    return !!hitBlockReason(nxt, this.you, me.x + me.vx * DT, me.z + me.vz * DT, true);
+  }
+
+  /** 相手の打球がノーバウンドのままアウトになりそうか */
+  goingOut(r) {
+    if (r.bounces !== 0 || r.lastHitter !== this.opp) return false;
+    const p = this.landingOf(r);
+    return !!p && !inCourt(p.x, p.z);
+  }
+
   ballRenderPos(out) {
     const r = this.sim.rally;
     const frac = Math.max(0, Math.min(1, this.estTick() - this.sim.tick));
@@ -466,12 +534,7 @@ export class GameSession {
     // 着地予測マーカー (自分に向かってくるボールのみ)
     let showLanding = false;
     if (r && r.active && !r.fault && r.lastHitter === this.opp && r.bounces === 0 && this.phase === 'rally') {
-      const key = `${r.seq}`;
-      if (key !== this.landingKey) {
-        this.landingKey = key;
-        this.landingPos = predictBounce(r);
-      }
-      if (this.landingPos) {
+      if (this.landingOf(r)) {
         showLanding = true;
         sc.landing.position.set(this.landingPos.x, 0.012, this.landingPos.z);
         const pulse = 1 + Math.sin(this.time * 10) * 0.08;
@@ -479,6 +542,22 @@ export class GameSession {
       }
     }
     sc.landing.visible = showLanding;
+
+    // 狙いマーカー: 相手の打球が自分のほうに来ている間、今の入力で返したときの着地点を出す
+    const mark = this.aimMark;
+    const incoming = r && r.active && !r.fault && r.lastHitter === this.opp && this.phase === 'rally'
+      && (sideOf(r.p[2]) === this.you || r.bounces === 0);
+    if (incoming && !this.over) {
+      const mv = this.input.getMove();
+      const shot = this.swingWin ? this.swingWin.shot : this.input.autoHit ? this.input.autoShot : SHOT.DRIVE;
+      const [ax, az] = aimPoint(this.you, shot, mv.x, mv.y, r.p[1]);
+      mark.position.set(ax, 0.014, az);
+      mark.material.opacity = this.swingWin ? 0.95 : 0.5;
+      mark.scale.setScalar(this.swingWin ? 1 + Math.sin(this.time * 14) * 0.06 : 0.9);
+      mark.visible = true;
+    } else {
+      mark.visible = false;
+    }
 
     // キッチン警告: キッチン内にいて、ノーバウンドのボールが来ているとき
     let glow = 0;

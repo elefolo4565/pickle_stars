@@ -2,8 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { Match } from '../shared/match.js';
 import { Bot } from '../shared/ai.js';
-import { createRally, stepRally, hitBlockReason, applyServe, inServiceCourt } from '../shared/rally.js';
-import { SHOT } from '../shared/constants.js';
+import {
+  createRally, stepRally, hitBlockReason, applyServe, applyHit, inServiceCourt,
+} from '../shared/rally.js';
+import { SHOT, REACH, DIVE_REACH, DIVE_QUALITY } from '../shared/constants.js';
 
 function playBots(levels, opts, maxTicks = 60 * 60 * 30) {
   const m = new Match(opts);
@@ -83,4 +85,36 @@ test('クライアント申告の位置はワープできない', () => {
     m.setPlayerInput(1, x0 + 5, pl.z, 0, pl.rs);
   }
   assert.ok(Math.abs(pl.x - (x0 + 5)) < 1e-9, '時間をかければ到達できる');
+});
+
+test('リーチの外でも飛びつけば届く (当たりは悪くなる)', () => {
+  const r = createRally(0, true);
+  applyServe(r, SHOT.DRIVE, 0, 0, 1.4, 7.2);
+  // リターン側のコートで 1 回バウンドしたあと
+  for (let i = 0; i < 300 && !(r.bounces === 1 && r.p[1] > 0.4); i++) stepRally(r);
+  assert.equal(r.bounces, 1);
+  const d = (REACH + DIVE_REACH) / 2;
+  const px = r.p[0] - d;
+  const pz = r.p[2];
+  assert.equal(hitBlockReason(r, 1, px, pz), 'reach');
+  assert.equal(hitBlockReason(r, 1, px, pz, true), null);
+  assert.equal(hitBlockReason(r, 1, r.p[0] - DIVE_REACH - 0.2, pz, true), 'reach');
+  const res = applyHit(r, 1, SHOT.DRIVE, 0, 0, px, pz, true);
+  assert.equal(res.kind, 'dive');
+  assert.equal(res.quality, DIVE_QUALITY);
+  assert.equal(r.lastHitter, 1);
+});
+
+test('サーバーは飛びつきの打球をラグ補償つきで受け付ける', () => {
+  const m = new Match();
+  for (let i = 0; i < 40; i++) m.step();
+  assert.ok(m.serve(0, SHOT.DRIVE, 0, 0));
+  const r = m.rally;
+  while (!(r.bounces === 1 && r.p[1] > 0.4) && m.tick < 1000) m.step();
+  const pl = m.players[1];
+  pl.x = r.p[0] - 1.9;
+  pl.z = r.p[2];
+  assert.equal(m.hit(1, m.tick, SHOT.SOFT, 0, 0, pl.x, pl.z), 'reach');
+  assert.equal(m.hit(1, m.tick, SHOT.SOFT, 0, 0, pl.x, pl.z, true), null);
+  assert.equal(m.rally.lastHitter, 1);
 });
