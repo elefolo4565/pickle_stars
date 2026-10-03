@@ -6,10 +6,12 @@ import { cloneRally, stepRally, hitBlockReason, inReach } from './rally.js';
 import { rightSign } from './shot.js';
 import { clampPlayer } from './match.js';
 
+// 強さの設定。speed: 移動速度の倍率 / reaction: 反応までの tick 数 / aimNoise: 狙いのブレ
+// posNoise: 立ち位置のブレ / whiff: 空振りの確率 / netRush: ネットに詰める確率
 const LEVELS = [
-  { speed: 0.7, reaction: 16, aimNoise: 0.5, aimMax: 1.0, posNoise: 0.5, whiff: 0.08, netRush: 0.3 },
-  { speed: 0.85, reaction: 10, aimNoise: 0.35, aimMax: 0.95, posNoise: 0.38, whiff: 0.03, netRush: 0.65 },
-  { speed: 0.95, reaction: 6, aimNoise: 0.25, aimMax: 0.9, posNoise: 0.33, whiff: 0.015, netRush: 0.95 },
+  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25 },
+  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5 },
+  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8 },
 ];
 
 function rand(a, b) {
