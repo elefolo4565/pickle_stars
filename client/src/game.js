@@ -4,7 +4,7 @@
 // - 自分の打球はローカルで即座に反映し、サーバーがラグ補償つきで検証する
 import * as THREE from 'three';
 import {
-  DT, DT_MS, MOVE_SPEED, MOVE_ACCEL, SWING_WINDOW, KITCHEN, forwardSign,
+  SHOT, DT, DT_MS, MOVE_SPEED, MOVE_ACCEL, SWING_WINDOW, KITCHEN, forwardSign,
 } from '@shared/constants.js';
 import {
   cloneRally, stepRally, hitBlockReason, applyHit, contactQuality, predictBounce,
@@ -283,6 +283,11 @@ export class GameSession {
       return;
     }
     if (this.phase !== 'rally') return;
+    this.startSwing(shot, now);
+  }
+
+  /** 構える (この間にボールが打点に来たら打つ) */
+  startSwing(shot, now) {
     this.swingWin = { shot, until: now + SWING_WINDOW * 1000, maxUntil: now + HOLD_MAX_MS };
     this.conn.send({ t: 'sw', s: shot });
     const ball = this.sim ? this.sim.rally.p : [this.me.x, 1, this.me.z];
@@ -291,6 +296,11 @@ export class GameSession {
 
   /** 毎 tick: 構え中ならベストな打点で打つ */
   checkHit() {
+    // オート打ち返し: 構えていなくても、打てる位置にボールが来たら最後に押したショットで構える
+    if (!this.swingWin && this.input.autoHit && !this.over && this.phase === 'rally' && this.sim
+      && !hitBlockReason(this.sim.rally, this.you, this.me.x, this.me.z)) {
+      this.startSwing(this.input.autoShot || SHOT.DRIVE, performance.now());
+    }
     const sw = this.swingWin;
     if (!sw || this.phase !== 'rally' || !this.sim) return;
     const r = this.sim.rally;

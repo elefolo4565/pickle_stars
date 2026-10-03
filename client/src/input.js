@@ -17,6 +17,10 @@ export class Input {
     this.padPrev = [];
     this.emotePress = -1;
     this.enabled = true;
+    // スマホ用オート打ち返し: 最後に押したショットボタンを覚えておき、打てる位置に来たら自動で打つ
+    this.autoHit = false;
+    this.autoShot = SHOT.DRIVE;
+    this.shotButtons = new Map();
 
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement) return;
@@ -24,7 +28,10 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       const s = KEY_SHOT[e.code];
-      if (s) this.press(s);
+      if (s) {
+        this.setAutoHit(false); // キーボードで打つ人にはオートを使わない
+        this.press(s);
+      }
       if (/^Digit[1-8]$/.test(e.code)) this.emotePress = Number(e.code.slice(5)) - 1;
     });
     window.addEventListener('keyup', (e) => {
@@ -46,6 +53,16 @@ export class Input {
 
   release(shot) {
     this.held.delete(shot);
+  }
+
+  setAutoHit(on) {
+    this.autoHit = on;
+    this.markAutoShot();
+  }
+
+  /** オートで打つショットのボタンに印を付ける */
+  markAutoShot() {
+    for (const [shot, el] of this.shotButtons) el.classList.toggle('auto', this.autoHit && shot === this.autoShot);
   }
 
   /** バーチャルスティックを要素に取り付ける */
@@ -100,10 +117,16 @@ export class Input {
 
   /** ショットボタンを取り付ける */
   attachButton(el, shot) {
+    this.shotButtons.set(shot, el);
+    this.markAutoShot();
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       el.setPointerCapture?.(e.pointerId);
       el.classList.add('down');
+      if (this.enabled) {
+        this.autoShot = shot;
+        this.markAutoShot();
+      }
       this.press(shot);
     });
     const up = () => {

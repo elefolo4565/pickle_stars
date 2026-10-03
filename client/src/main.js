@@ -331,7 +331,8 @@ EMOJIS.forEach((e, i) => {
 });
 $('btn-emote').addEventListener('click', () => emoteMenu.classList.toggle('hidden'));
 
-// タッチ操作
+// タッチ操作 (スマホではオート打ち返しを使う)
+input.setAutoHit(IS_TOUCH);
 input.attachJoystick($('touch-zone'), $('joy-base'), $('joy-knob'));
 input.attachButton($('shot-drive'), SHOT.DRIVE);
 input.attachButton($('shot-soft'), SHOT.SOFT);
