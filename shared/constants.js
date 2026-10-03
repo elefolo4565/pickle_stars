@@ -17,7 +17,9 @@ export const NET_HALF_W = 3.35;
 
 // ボール
 export const BALL_R = 0.037;
-export const GRAVITY = 9.8;
+// ボールの速さの倍率。軌道の形を変えずに全体をゆっくりにするため、重力は倍率の 2 乗で弱める
+export const BALL_SPEED = 0.8;
+export const GRAVITY = 9.8 * BALL_SPEED * BALL_SPEED;
 export const BOUNCE_RESTITUTION = 0.62;
 export const BOUNCE_FRICTION = 0.8;
 
@@ -28,6 +30,10 @@ export const REACH = 1.3; // 水平方向のリーチ
 export const REACH_MIN_Y = 0.04;
 export const REACH_MAX_Y = 2.4;
 export const SWING_WINDOW = 0.4; // ボタンを押してから打てる猶予 (秒)
+// 飛びつき: 普通のリーチの外でも、このくらいまでなら飛びついて返せる (当たりは悪くなる)
+export const DIVE_REACH = 2.3;
+export const DIVE_QUALITY = 0.62;
+export const DIVE_RECOVER = 0.7; // 飛びついたあと起き上がるまで動けない時間 (秒)
 export const PLAYER_BOUNDS_X = 6.5;
 export const PLAYER_BOUNDS_Z = 10.5;
 export const PLAYER_NET_GAP = 0.3;

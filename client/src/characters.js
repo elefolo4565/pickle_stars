@@ -355,6 +355,7 @@ export class Chibi {
     this.time = Math.random() * 10;
     this.mood = null; // 'win' | 'lose'
     this.moodT = 0;
+    this.diveState = null;
   }
 
   /** 構え (バックスイング) */
@@ -365,6 +366,14 @@ export class Chibi {
   /** 振り抜き */
   strike(kind) {
     this.swing = { kind, stage: 'swing', t: 0 };
+  }
+
+  /**
+   * 飛びつき。(wx, wz) はワールド座標での飛ぶ方向 (長さ = 飛ぶ距離)
+   */
+  dive(wx, wz, kind = 'fh') {
+    this.diveState = { t: 0, wx, wz };
+    this.strike(kind);
   }
 
   showEmote(i) {
@@ -441,6 +450,8 @@ export class Chibi {
       if (this.moodT > 1.8) this.mood = null;
     }
 
+    this.updateDive(dt);
+
     // エモート
     if (this.emote.visible) {
       this.emoteT += dt;
@@ -450,6 +461,40 @@ export class Chibi {
       this.emote.position.y = 2.35 + Math.sin(t * 4) * 0.04;
       if (t > 2.2) this.emote.visible = false;
     }
+  }
+
+  updateDive(dt) {
+    const m = this.model;
+    const d = this.diveState;
+    if (!d) {
+      m.position.x = m.position.z = 0;
+      m.rotation.x = m.rotation.z = 0;
+      return;
+    }
+    d.t += dt;
+    const t = d.t;
+    // 飛び出す → 倒れ込む → 起き上がる
+    let f;
+    if (t < 0.14) f = 1 - (1 - t / 0.14) ** 2;
+    else if (t < 0.42) f = 1;
+    else if (t < 0.7) f = 1 - (t - 0.42) / 0.28;
+    else {
+      this.diveState = null;
+      f = 0;
+    }
+    // ワールドの向きをモデルの向きに直す
+    const ry = this.root.rotation.y;
+    const c = Math.cos(ry);
+    const sn = Math.sin(ry);
+    const lx = d.wx * c - d.wz * sn;
+    const lz = d.wx * sn + d.wz * c;
+    const len = Math.hypot(lx, lz) || 1;
+    const tilt = 1.05 * f;
+    m.position.x = lx * f;
+    m.position.z = lz * f;
+    m.position.y += -0.22 * f;
+    m.rotation.x = tilt * (lz / len);
+    m.rotation.z = -tilt * (lx / len);
   }
 
   /** 左手のワールド座標 (サーブ前にボールを持たせる) */

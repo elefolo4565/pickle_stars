@@ -6,6 +6,7 @@ import {
 import { toonMat, toonMesh, GEO } from './toon.js';
 
 export const MENU_CHAR_Z = 5.4;
+const TRAIL_N = 26; // 軌跡の長さ (フレーム数)
 export const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
 const COLORS = {
@@ -297,19 +298,35 @@ export class GameScene {
     this.scene.add(this.landing);
     this.landing.visible = false;
 
-    // 軌跡
-    const N = 10;
-    this.trail = [];
-    for (let i = 0; i < N; i++) {
-      const m = new THREE.Mesh(
-        new THREE.SphereGeometry(VIS_R * (1 - i / N) * 0.9, 8, 6),
-        new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 * (1 - i / N), depthWrite: false }),
-      );
-      m.visible = false;
-      this.scene.add(m);
-      this.trail.push(m);
-    }
+    // 軌跡 (カメラの方を向いた帯。新しいほど太く濃い)
+    const N = TRAIL_N;
     this.trailHist = [];
+    this.trailPos = new Float32Array(N * 2 * 3);
+    const col = new Float32Array(N * 2 * 4);
+    for (let i = 0; i < N; i++) {
+      const a = Math.pow(1 - i / (N - 1), 1.4) * 0.75;
+      for (let k = 0; k < 2; k++) col.set([1, 1, 0.55, a], (i * 2 + k) * 4);
+    }
+    const idx = [];
+    for (let i = 0; i < N - 1; i++) {
+      const a = i * 2;
+      idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.BufferAttribute(this.trailPos, 3).setUsage(THREE.DynamicDrawUsage));
+    g.setAttribute('color', new THREE.BufferAttribute(col, 4));
+    g.setIndex(idx);
+    this.trail = new THREE.Mesh(g, new THREE.MeshBasicMaterial({
+      vertexColors: true, transparent: true, depthWrite: false, side: THREE.DoubleSide,
+    }));
+    this.trail.frustumCulled = false;
+    this.trail.renderOrder = 3;
+    this.trail.visible = false;
+    this.scene.add(this.trail);
+    this.trailW = VIS_R * 1.1;
+    this.tA = new THREE.Vector3();
+    this.tB = new THREE.Vector3();
+    this.tC = new THREE.Vector3();
   }
 
   /** ボールの描画位置を更新 */
@@ -317,27 +334,62 @@ export class GameScene {
     this.ball.visible = visible;
     this.ballShadow.visible = visible;
     if (!visible) {
-      for (const t of this.trail) t.visible = false;
+      this.trail.visible = false;
       this.trailHist.length = 0;
       return;
     }
-    this.ball.position.set(x, y + (this.ballVisR - BALL_R), z);
+    const vy = y + (this.ballVisR - BALL_R);
+    this.ball.position.set(x, vy, z);
     this.ball.rotation.x += 0.2;
     this.ball.rotation.z += 0.13;
     const sh = Math.max(0.35, 1 - y / 5);
     this.ballShadow.position.set(x, 0.008, z);
     this.ballShadow.scale.setScalar(sh);
     this.ballShadow.material.opacity = sh;
+    this.updateTrail(x, vy, z, speed > 1);
+  }
 
-    this.trailHist.unshift([x, y + (this.ballVisR - BALL_R), z]);
-    if (this.trailHist.length > this.trail.length) this.trailHist.length = this.trail.length;
-    const show = speed > 9;
-    for (let i = 0; i < this.trail.length; i++) {
-      const p = this.trailHist[i];
-      const t = this.trail[i];
-      t.visible = show && !!p && i > 0;
-      if (p) t.position.set(p[0], p[1], p[2]);
+  updateTrail(x, y, z, moving) {
+    const hist = this.trailHist;
+    const last = hist[0];
+    // 止まっている・瞬間移動した (サーブ直後など) ときは軌跡を消す
+    if (!moving || (last && Math.hypot(last[0] - x, last[1] - y, last[2] - z) > 2.5)) hist.length = 0;
+    if (!moving) {
+      this.trail.visible = false;
+      return;
     }
+    hist.unshift([x, y, z]);
+    if (hist.length > TRAIL_N) hist.length = TRAIL_N;
+    if (hist.length < 2) {
+      this.trail.visible = false;
+      return;
+    }
+    const pos = this.trailPos;
+    const cam = this.camera.position;
+    const dir = this.tA;
+    const toCam = this.tB;
+    const side = this.tC;
+    const n = hist.length;
+    for (let i = 0; i < TRAIL_N; i++) {
+      const p = hist[Math.min(i, n - 1)];
+      const a = hist[Math.min(Math.max(i - 1, 0), n - 1)];
+      const b = hist[Math.min(i + 1, n - 1)];
+      dir.set(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+      toCam.set(cam.x - p[0], cam.y - p[1], cam.z - p[2]);
+      side.crossVectors(dir, toCam);
+      const len = side.length();
+      const w = i < n ? this.trailW * (1 - i / TRAIL_N) : 0;
+      if (len > 1e-6) side.multiplyScalar(w / len);
+      else side.set(0, 0, 0);
+      pos[i * 6] = p[0] + side.x;
+      pos[i * 6 + 1] = p[1] + side.y;
+      pos[i * 6 + 2] = p[2] + side.z;
+      pos[i * 6 + 3] = p[0] - side.x;
+      pos[i * 6 + 4] = p[1] - side.y;
+      pos[i * 6 + 5] = p[2] - side.z;
+    }
+    this.trail.geometry.attributes.position.needsUpdate = true;
+    this.trail.visible = true;
   }
 
   /** カメラを自分側に配置。side=1 ならコートの反対側から見る */

@@ -3,7 +3,7 @@
 import {
   DT, BALL_R, GRAVITY, BOUNCE_RESTITUTION, BOUNCE_FRICTION,
   COURT_HALF_W, COURT_HALF_L, KITCHEN, NET_HALF_W,
-  REACH, REACH_MIN_Y, REACH_MAX_Y,
+  REACH, REACH_MIN_Y, REACH_MAX_Y, DIVE_REACH, DIVE_QUALITY,
   forwardSign, sideOf, netHeightAt,
 } from './constants.js';
 import { computeShot, computeServe, servePosition, rightSign } from './shot.js';
@@ -176,11 +176,12 @@ export function contactQuality(r, px, pz) {
   return Math.max(0.3, Math.min(qd, qy));
 }
 
-/** ボールがリーチ内にあるか */
-export function inReach(r, idx, px, pz) {
+/** ボールがリーチ内にあるか (dive なら飛びついて届く範囲) */
+export function inReach(r, idx, px, pz, dive = false) {
   const dx = r.p[0] - px;
   const dz = r.p[2] - pz;
-  if (dx * dx + dz * dz > REACH * REACH) return false;
+  const reach = dive ? DIVE_REACH : REACH;
+  if (dx * dx + dz * dz > reach * reach) return false;
   if (r.p[1] < REACH_MIN_Y || r.p[1] > REACH_MAX_Y) return false;
   // 背中側に大きく回ったボールは打てない
   if (dz * forwardSign(idx) < -0.8) return false;
@@ -189,22 +190,24 @@ export function inReach(r, idx, px, pz) {
 
 /**
  * 打てるかどうか。打てるなら null、打てない理由があればその文字列。
+ * @param {boolean} [dive] 飛びついて打つ (リーチが広がる)
  * @returns {string|null}
  */
-export function hitBlockReason(r, idx, px, pz) {
+export function hitBlockReason(r, idx, px, pz, dive = false) {
   if (!r.active || r.fault) return 'inactive';
   if (r.lastHitter === idx) return 'twice';
   if (sideOf(r.p[2]) !== idx) return 'side';
   if (r.bounces >= 2) return 'dead';
-  if (!inReach(r, idx, px, pz)) return 'reach';
+  if (!inReach(r, idx, px, pz, dive)) return 'reach';
   if (r.bounces === 0 && r.hitCount <= 2) return 'twobounce';
   if (r.bounces === 0 && Math.abs(pz) < KITCHEN) return 'kitchen';
   return null;
 }
 
 /** 打球を適用する。呼ぶ前に hitBlockReason で検証しておくこと。 */
-export function applyHit(r, idx, shot, aimX, aimY, px, pz) {
-  const quality = contactQuality(r, px, pz);
+export function applyHit(r, idx, shot, aimX, aimY, px, pz, dive = false) {
+  // 飛びついた打球は当たりが一定で悪い (体勢が崩れている)
+  const quality = dive ? DIVE_QUALITY : contactQuality(r, px, pz);
   const res = computeShot(r.p, idx, shot, aimX, aimY, quality);
   r.v = res.v;
   r.hitCount++;
@@ -213,7 +216,7 @@ export function applyHit(r, idx, shot, aimX, aimY, px, pz) {
   r.netTouched = false;
   r.rolling = false;
   r.seq++;
-  return { kind: res.kind, quality };
+  return { kind: dive ? 'dive' : res.kind, quality };
 }
 
 /** サーブ準備状態にする */

@@ -1,7 +1,7 @@
 // 打球の軌道計算。サーバーとクライアントで同じ結果になるよう、
 // 乱数や三角関数を使わない決定的な計算だけで構成している。
 import {
-  BALL_R, GRAVITY, COURT_HALF_W, COURT_HALF_L, KITCHEN, SHOT,
+  BALL_R, GRAVITY, BALL_SPEED, COURT_HALF_W, COURT_HALF_L, KITCHEN, SHOT,
   forwardSign, netHeightAt,
 } from './constants.js';
 
@@ -42,6 +42,35 @@ function clamp(v, lo, hi) {
 }
 
 /**
+ * 打球の種類ごとの狙う深さ・速さ・ネット上の余裕 (当たりが完璧なとき)。
+ * @param {string} kind SHOT.* または 'smash'
+ * @param {number} ay -1..1
+ * @param {number} y 打点の高さ
+ */
+function shotParams(kind, ay, y) {
+  switch (kind) {
+    case 'smash':
+      return { depth: 4.2 + ay * 1.6, speed: 21, clearance: 0.05 };
+    case SHOT.SOFT:
+      return { depth: 1.25 + ay * 0.6, speed: 0, clearance: 0.22 };
+    case SHOT.LOB:
+      return { depth: 5.5 + ay * 0.7, speed: 0, clearance: 0.9 };
+    default:
+      return { depth: 5.2 + ay * 1.0, speed: y < 0.45 ? 11.5 : 14.5, clearance: 0.12 };
+  }
+}
+
+/**
+ * 当たりが完璧なときの狙いの着地点 (表示用)。
+ * @returns {number[]} [x, z]
+ */
+export function aimPoint(idx, shot, aimX, aimY, ballY = 1) {
+  const kind = shot === SHOT.DRIVE && ballY > 1.5 ? 'smash' : shot;
+  const { depth } = shotParams(kind, clamp(aimY, -1, 1), ballY);
+  return [clamp(aimX, -1, 1) * rightSign(idx) * 2.6, forwardSign(idx) * depth];
+}
+
+/**
  * ラリー中の打球。
  * @param {number[]} p ボール位置
  * @param {number} idx 打ったプレイヤー
@@ -58,28 +87,7 @@ export function computeShot(p, idx, shot, aimX, aimY, quality) {
   let kind = shot;
   if (shot === SHOT.DRIVE && p[1] > 1.5) kind = 'smash';
 
-  let depth;
-  let speed = 0;
-  let clearance;
-  switch (kind) {
-    case 'smash':
-      depth = 4.2 + ay * 1.6;
-      speed = 21;
-      clearance = 0.05;
-      break;
-    case SHOT.SOFT:
-      depth = 1.25 + ay * 0.6;
-      clearance = 0.22;
-      break;
-    case SHOT.LOB:
-      depth = 5.5 + ay * 0.7;
-      clearance = 0.9;
-      break;
-    default:
-      depth = 5.2 + ay * 1.0;
-      speed = p[1] < 0.45 ? 11.5 : 14.5;
-      clearance = 0.12;
-  }
+  let { depth, speed, clearance } = shotParams(kind, ay, p[1]);
 
   let tx = ax * 2.6;
   // 当たりが悪いほど、狙った方向へ大きくぶれる (サイドラインを狙うほどリスクが高い)
@@ -98,6 +106,7 @@ export function computeShot(p, idx, shot, aimX, aimY, quality) {
   if (kind === SHOT.SOFT) tau = 0.6 + hd * 0.075;
   else if (kind === SHOT.LOB) tau = 1.35 + hd * 0.045;
   else tau = hd / speed;
+  tau /= BALL_SPEED;
 
   return { v: solveTrajectory(p, tx, tz, tau, clearance), kind };
 }
@@ -132,5 +141,6 @@ export function computeServe(p, idx, serveRight, shot, aimX, aimY) {
   const tz = forwardSign(idx) * depth;
   const hd = Math.sqrt((tx - p[0]) ** 2 + (tz - p[2]) ** 2);
   if (tau === undefined) tau = hd / (shot === SHOT.SOFT ? 8.5 : 12.5);
+  tau /= BALL_SPEED;
   return { v: solveTrajectory(p, tx, tz, tau, 0.2), kind: 'serve' };
 }

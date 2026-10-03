@@ -1,17 +1,17 @@
 // CPU プレイヤー。Match を直接操作する (権威側でのみ動く)。
 import {
-  DT, MOVE_SPEED, KITCHEN, COURT_HALF_L, SHOT, forwardSign, sideOf,
+  DT, MOVE_SPEED, KITCHEN, COURT_HALF_L, SHOT, DIVE_RECOVER, forwardSign, sideOf,
 } from './constants.js';
 import { cloneRally, stepRally, hitBlockReason, inReach } from './rally.js';
 import { rightSign } from './shot.js';
 import { clampPlayer } from './match.js';
 
 // 強さの設定。speed: 移動速度の倍率 / reaction: 反応までの tick 数 / aimNoise: 狙いのブレ
-// posNoise: 立ち位置のブレ / whiff: 空振りの確率 / netRush: ネットに詰める確率
+// posNoise: 立ち位置のブレ / whiff: 空振りの確率 / netRush: ネットに詰める確率 / dive: 飛びつくか
 const LEVELS = [
-  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25 },
-  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5 },
-  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8 },
+  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25, dive: false },
+  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5, dive: true },
+  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8, dive: true },
 ];
 
 function rand(a, b) {
@@ -43,6 +43,7 @@ export class Bot {
     this.seqSeenTick = 0;
     this.serveDelay = rand(1.0, 1.8);
     this.rushNet = false;
+    this.recoverUntil = -1;
   }
 
   /** @param {import('./match.js').Match} m */
@@ -52,6 +53,8 @@ export class Bot {
     let tx = pl.x;
     let tz = pl.z;
     const f = forwardSign(this.idx);
+    // 飛びついたあとは起き上がるまで動けない
+    if (m.phase === 'rally' && m.tick < this.recoverUntil) return;
 
     if (m.phase === 'serve') {
       this.plan = null;
@@ -82,6 +85,12 @@ export class Bot {
       if (!this.whiff && hitBlockReason(r, this.idx, pl.x, pl.z) === null) {
         const due = !this.plan || m.tick >= this.plan.tick - 1 || !this.willStayInReach(r, pl);
         if (due) this.doHit(m, pl);
+      } else if (!this.whiff && this.cfg.dive && hitBlockReason(r, this.idx, pl.x, pl.z, true) === null
+        && !this.willStayInReach(r, pl, true)) {
+        // 間に合わない: 届く範囲から出ていく直前に飛びつく
+        this.doHit(m, pl, true);
+        this.recoverUntil = m.tick + Math.round(DIVE_RECOVER / DT);
+        return;
       }
     } else if (m.phase === 'rally') {
       // 自分が打った後はホームポジションへ
@@ -104,11 +113,11 @@ export class Bot {
     this.moveToward(m, pl, tx, tz);
   }
 
-  willStayInReach(r, pl) {
+  willStayInReach(r, pl, dive = false) {
     const s = cloneRally(r);
     stepRally(s);
     stepRally(s);
-    return inReach(s, this.idx, pl.x, pl.z) && s.bounces < 2;
+    return inReach(s, this.idx, pl.x, pl.z, dive) && s.bounces < 2;
   }
 
   moveToward(m, pl, tx, tz) {
@@ -164,7 +173,7 @@ export class Bot {
     return best;
   }
 
-  doHit(m, pl) {
+  doHit(m, pl, dive = false) {
     const r = m.rally;
     const opp = m.players[1 - this.idx];
     const myDepth = Math.abs(pl.z);
@@ -181,6 +190,6 @@ export class Bot {
     let aimX = -Math.sign(oppViewX || (Math.random() - 0.5)) * this.cfg.aimMax * rand(0.4, 1);
     aimX += rand(-1, 1) * this.cfg.aimNoise;
     const aimY = rand(-0.5, 0.5) + rand(-1, 1) * this.cfg.aimNoise * 0.5;
-    m.hit(this.idx, m.tick, shot, aimX, aimY, pl.x, pl.z);
+    m.hit(this.idx, m.tick, shot, aimX, aimY, pl.x, pl.z, dive);
   }
 }

@@ -160,7 +160,7 @@ export class Match {
    * ラグ補償つきの打球。atTick 時点のボールで判定し、現在まで再シミュレーションする。
    * @returns {string|null} 失敗理由。成功なら null
    */
-  hit(idx, atTick, shot, aimX, aimY, px, pz) {
+  hit(idx, atTick, shot, aimX, aimY, px, pz, dive = false) {
     if (this.phase !== 'rally') return 'phase';
     if (![atTick, aimX, aimY, px, pz].every(Number.isFinite)) return 'bad';
     const pl = this.players[idx];
@@ -180,10 +180,10 @@ export class Match {
     }
     if (!base) return 'history';
     const r = cloneRally(base.rally);
-    const reason = hitBlockReason(r, idx, px, pz);
+    const reason = hitBlockReason(r, idx, px, pz, dive);
     if (reason) return reason;
 
-    const res = applyHit(r, idx, shot, aimX, aimY, px, pz);
+    const res = applyHit(r, idx, shot, aimX, aimY, px, pz, dive);
     // 履歴を巻き戻して再シミュレーション
     while (this.history.length && this.history[this.history.length - 1].tick >= base.tick) {
       this.history.pop();
