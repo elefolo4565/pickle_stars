@@ -130,6 +130,8 @@ html, body {
   display: flex; align-items: center; justify-content: center;
   background: rgba(10, 20, 60, 0.45);
   padding: 16px;
+  /* 試合 HUD (スティックの操作エリア等) より手前に出す。DOM 順では HUD が後ろにあるため */
+  z-index: 5;
 }
 .panel {
   display: none;
