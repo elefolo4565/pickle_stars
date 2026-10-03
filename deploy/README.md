@@ -27,22 +27,22 @@ node -v   # v22.x
 
 ### 2. デプロイ用ユーザーと実行用ユーザー
 
-- `deploy` … GitHub Actions が SSH で入るユーザー。ファイルを置き、サービスを再起動するだけ
+- `gameadmin` … GitHub Actions が SSH で入るユーザー。ファイルを置き、サービスを再起動するだけ（今後ほかのゲームを置くときも共通で使う）
 - `pickle` … ゲームサーバーを動かすユーザー（ログイン不可）
 
 ```bash
-sudo useradd --create-home --shell /bin/bash deploy
+sudo useradd --create-home --shell /bin/bash gameadmin
 sudo useradd --system --create-home --shell /usr/sbin/nologin pickle
 sudo mkdir -p /opt/pickle-stars
-sudo chown deploy:deploy /opt/pickle-stars
+sudo chown gameadmin:gameadmin /opt/pickle-stars
 # 起動失敗時のログを Actions から読めるように
-sudo usermod -aG systemd-journal deploy
+sudo usermod -aG systemd-journal gameadmin
 ```
 
-`deploy` にはサービスの再起動だけをパスワードなしで許可します:
+`gameadmin` にはサービスの再起動だけをパスワードなしで許可します:
 
 ```bash
-echo 'deploy ALL=(root) NOPASSWD: /usr/bin/systemctl restart pickle-stars' | sudo tee /etc/sudoers.d/pickle-stars-deploy
+echo 'gameadmin ALL=(root) NOPASSWD: /usr/bin/systemctl restart pickle-stars' | sudo tee /etc/sudoers.d/pickle-stars-deploy
 sudo chmod 440 /etc/sudoers.d/pickle-stars-deploy
 sudo visudo -c
 ```
@@ -55,16 +55,16 @@ sudo visudo -c
 ssh-keygen -t ed25519 -C "github-actions-pickle-stars" -f pickle_deploy -N ""
 ```
 
-公開鍵 `pickle_deploy.pub` の 1 行を VPS の `deploy` ユーザーに登録します:
+公開鍵 `pickle_deploy.pub` の 1 行を VPS の `gameadmin` ユーザーに登録します:
 
 ```bash
-sudo mkdir -p /home/deploy/.ssh
-sudo nano /home/deploy/.ssh/authorized_keys   # pickle_deploy.pub の中身を貼り付け
-sudo chown -R deploy:deploy /home/deploy/.ssh
-sudo chmod 700 /home/deploy/.ssh && sudo chmod 600 /home/deploy/.ssh/authorized_keys
+sudo mkdir -p /home/gameadmin/.ssh
+sudo nano /home/gameadmin/.ssh/authorized_keys   # pickle_deploy.pub の中身を貼り付け
+sudo chown -R gameadmin:gameadmin /home/gameadmin/.ssh
+sudo chmod 700 /home/gameadmin/.ssh && sudo chmod 600 /home/gameadmin/.ssh/authorized_keys
 ```
 
-手元から `ssh -i pickle_deploy deploy@<VPSのIP>` で入れれば OK です。
+手元から `ssh -i pickle_deploy gameadmin@<VPSのIP>` で入れれば OK です。
 
 ### 4. systemd ユニット
 
@@ -107,7 +107,7 @@ HTTPS で開けば WebSocket は自動的に `wss://elefolo2.com/games/pickle_st
 | 名前 | 内容 |
 |---|---|
 | `SSH_HOST` | VPS の IP アドレス（またはホスト名） |
-| `SSH_USER` | `deploy` |
+| `SSH_USER` | `gameadmin` |
 | `SSH_PORT` | SSH のポート（22 なら登録不要） |
 | `SSH_PRIVATE_KEY` | 秘密鍵ファイル `pickle_deploy` の中身全体（`-----BEGIN` から `END ... KEY-----` まで） |
 | `SSH_KNOWN_HOSTS` | 手元で `ssh-keyscan -p <SSHのポート> <VPSのIP>` を実行した出力全体 |
