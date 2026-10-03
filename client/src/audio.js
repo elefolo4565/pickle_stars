@@ -25,6 +25,11 @@ export function unlockAudio() {
   if (ctx.state === 'suspended') ctx.resume();
 }
 
+/** BGM など他のモジュールから同じ AudioContext を使うため */
+export function audioContext() {
+  return ctx;
+}
+
 export function setSound(on) {
   enabled = on;
   try {

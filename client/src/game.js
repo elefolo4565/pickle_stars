@@ -14,6 +14,7 @@ import { rightSign } from '@shared/shot.js';
 import { Chibi } from './characters.js';
 import { makeBlob, makeRing } from './scene.js';
 import { sfx } from './audio.js';
+import { music } from './music.js';
 
 const INTERP_TICKS = 6; // 相手の表示は 100ms 遅らせて補間する
 const SEND_INTERVAL = 1000 / 30;
@@ -258,6 +259,7 @@ export class GameSession {
         this.over = true;
         const win = e.winner === this.you;
         this.chars[e.winner].setMood('win');
+        music.stop(); // ファンファーレを目立たせる
         if (win) sfx.fanfare();
         else sfx.lose();
         setTimeout(() => hud.showResult(win, e.score[this.you], e.score[this.opp], this.conn.online), 900);
