@@ -6,6 +6,7 @@ import { NetConnection, LocalConnection } from './net.js';
 import { GameSession } from './game.js';
 import { Hud, Modal, initSegs, segValue, toast } from './hud.js';
 import { unlockAudio, sfx, setSound, soundOn } from './audio.js';
+import { music } from './music.js';
 import { SHOT } from '@shared/constants.js';
 
 const $ = (id) => document.getElementById(id);
@@ -81,11 +82,16 @@ $('char-next').addEventListener('click', () => {
 });
 
 function updateSoundBtn() {
-  $('btn-sound').textContent = `サウンド: ${soundOn() ? 'ON' : 'OFF'}`;
+  $('btn-sound').textContent = `効果音: ${soundOn() ? 'ON' : 'OFF'}`;
+  $('btn-bgm').textContent = `BGM: ${music.on() ? 'ON' : 'OFF'}`;
 }
 updateSoundBtn();
 $('btn-sound').addEventListener('click', () => {
   setSound(!soundOn());
+  updateSoundBtn();
+});
+$('btn-bgm').addEventListener('click', () => {
+  music.set(!music.on());
   updateSoundBtn();
 });
 
@@ -102,8 +108,13 @@ $('btn-full').addEventListener('click', async () => {
   }
 });
 
-document.addEventListener('pointerdown', unlockAudio, { capture: true });
-document.addEventListener('keydown', unlockAudio, { capture: true });
+// ブラウザは最初の操作まで音を出せないので、そのタイミングで音声を有効にして BGM を始める
+function onFirstInput() {
+  unlockAudio();
+  music.refresh();
+}
+document.addEventListener('pointerdown', onFirstInput, { capture: true });
+document.addEventListener('keydown', onFirstInput, { capture: true });
 
 $('btn-howto').addEventListener('click', () => modal.open('pnl-howto'));
 $('btn-create').addEventListener('click', () => modal.open('pnl-create'));
@@ -276,6 +287,7 @@ function startGame(start) {
   state.mode = 'game';
   hud.show();
   sfx.click();
+  music.play('match');
 }
 
 function backToMenu(sendLeave) {
@@ -297,6 +309,7 @@ function backToMenu(sendLeave) {
   state.mode = 'menu';
   $('emote-menu').classList.add('hidden');
   showMenuChar();
+  music.play('menu');
 }
 
 $('btn-exit').addEventListener('click', () => {
@@ -347,6 +360,7 @@ function frame(now) {
 scene.renderer.setAnimationLoop(frame);
 
 showMenuChar();
+music.play('menu');
 
 // 招待リンク (?room=XXXX) から来た場合
 const roomParam = new URLSearchParams(location.search).get('room');
