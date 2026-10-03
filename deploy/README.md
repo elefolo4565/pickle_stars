@@ -1,105 +1,130 @@
-# さくらVPS (Ubuntu) へのデプロイ手順
+# さくらVPS (Ubuntu + nginx) へのデプロイ
 
-構成：
+公開URL: **https://elefolo2.com/games/pickle_stars/**
 
 ```
-ブラウザ ──HTTPS──▶ nginx ─┬─ 静的ファイル (/opt/pickle-stars/dist)
-                            └─ /ws ──▶ Node.js ゲームサーバー (127.0.0.1:3000)
+ブラウザ ──HTTPS──▶ nginx (elefolo2.com) ─┬─ /games/pickle_stars/     → 静的ファイル (/opt/pickle-stars/dist)
+                                          └─ /games/pickle_stars/ws   → Node.js ゲームサーバー (127.0.0.1:3000)
 ```
 
-Ubuntu 22.04 / 24.04 を想定しています。`example.com` は自分のドメインに置き換えてください。
+`main` ブランチに push すると GitHub Actions (`.github/workflows/deploy.yml`) が
+テスト → ビルド → rsync で VPS へ転送 → `npm ci --omit=dev` → ゲームサーバー再起動 → ヘルスチェック
+まで自動で行います。Actions の画面から「Run workflow」で手動実行もできます。
 
-## 0. 事前準備
+VPS 側に GitHub の認証情報は置きません（Actions から SSH で送り込む方式）。
 
-- ドメインの A レコードを VPS の IP アドレスに向けておく（HTTPS 化に必要です）
-- さくらのコントロールパネルで **パケットフィルター** を使っている場合は、
-  **TCP 80 (HTTP) と 443 (HTTPS)** を許可する
-- ufw を使っている場合:
+## 初回セットアップ（VPS で 1 回だけ）
 
-```bash
-sudo ufw allow OpenSSH
-sudo ufw allow 'Nginx Full'
-sudo ufw enable
-```
+Ubuntu 22.04 / 24.04、elefolo2.com の nginx と HTTPS (certbot など) は設定済みの前提です。
 
-## 1. Node.js 22 と nginx を入れる
+### 1. Node.js 22 と rsync
 
 ```bash
 curl -fsSL https://deb.nodesource.com/setup_22.x | sudo -E bash -
-sudo apt-get install -y nodejs nginx git
-node -v   # v22.x になっていれば OK
+sudo apt-get install -y nodejs rsync
+node -v   # v22.x
 ```
 
-## 2. 実行ユーザーとソースの配置
+### 2. デプロイ用ユーザーと実行用ユーザー
+
+- `gameadmin` … GitHub Actions が SSH で入るユーザー。ファイルを置き、サービスを再起動するだけ（今後ほかのゲームを置くときも共通で使う）
+- `pickle` … ゲームサーバーを動かすユーザー（ログイン不可）
 
 ```bash
+sudo useradd --create-home --shell /bin/bash gameadmin
 sudo useradd --system --create-home --shell /usr/sbin/nologin pickle
 sudo mkdir -p /opt/pickle-stars
-sudo chown pickle:pickle /opt/pickle-stars
+sudo chown gameadmin:gameadmin /opt/pickle-stars
+# 起動失敗時のログを Actions から読めるように
+sudo usermod -aG systemd-journal gameadmin
 ```
 
-ソースの置き方はどちらか:
-
-- **Git を使う場合（おすすめ）**: GitHub 等に push しておき
-  `sudo -u pickle git clone <リポジトリURL> /opt/pickle-stars`
-- **手元からコピーする場合**: Windows の PowerShell で
-  `scp -r D:\gameProject\pickle_stars\* ユーザー名@サーバーIP:/tmp/pickle-stars/` を実行し、
-  サーバーで `sudo cp -r /tmp/pickle-stars/. /opt/pickle-stars/ && sudo chown -R pickle:pickle /opt/pickle-stars`
-  （`node_modules` と `dist` はコピー不要です）
-
-## 3. ビルド
+`gameadmin` にはサービスの再起動だけをパスワードなしで許可します:
 
 ```bash
-cd /opt/pickle-stars
-sudo -u pickle npm ci
-sudo -u pickle npm test        # ルールのテスト (数秒)
-sudo -u pickle npm run build   # dist/ が作られる
+echo 'gameadmin ALL=(root) NOPASSWD: /usr/bin/systemctl restart pickle-stars' | sudo tee /etc/sudoers.d/pickle-stars-deploy
+sudo chmod 440 /etc/sudoers.d/pickle-stars-deploy
+sudo visudo -c
 ```
 
-## 4. ゲームサーバーを常駐させる (systemd)
+### 3. デプロイ用の SSH 鍵
+
+手元の PC で専用の鍵を作ります（パスフレーズなし。Windows の PowerShell でも同じコマンドで作れます）:
 
 ```bash
-sudo cp /opt/pickle-stars/deploy/pickle-stars.service /etc/systemd/system/
+ssh-keygen -t ed25519 -C "github-actions-pickle-stars" -f pickle_deploy -N ""
+```
+
+公開鍵 `pickle_deploy.pub` の 1 行を VPS の `gameadmin` ユーザーに登録します:
+
+```bash
+sudo mkdir -p /home/gameadmin/.ssh
+sudo nano /home/gameadmin/.ssh/authorized_keys   # pickle_deploy.pub の中身を貼り付け
+sudo chown -R gameadmin:gameadmin /home/gameadmin/.ssh
+sudo chmod 700 /home/gameadmin/.ssh && sudo chmod 600 /home/gameadmin/.ssh/authorized_keys
+```
+
+手元から `ssh -i pickle_deploy gameadmin@<VPSのIP>` で入れれば OK です。
+
+### 4. systemd ユニット
+
+このリポジトリの `deploy/pickle-stars.service` の内容を `/etc/systemd/system/pickle-stars.service` に保存して:
+
+```bash
 sudo systemctl daemon-reload
-sudo systemctl enable --now pickle-stars
-sudo systemctl status pickle-stars       # active (running) を確認
-curl http://127.0.0.1:3000/healthz       # {"ok":true,...} が返れば OK
+sudo systemctl enable pickle-stars
 ```
 
-ログは `journalctl -u pickle-stars -f` で見られます。
+起動は最初のデプロイで行われます。ポート 3000 をほかのアプリが使っている場合は、
+ユニットの `PORT`、nginx 設定の `127.0.0.1:3000`、ワークフローのヘルスチェックの `3000` をそろえて変更してください。
 
-## 5. nginx の設定
+### 5. nginx
+
+`deploy/nginx-pickle-stars.conf` の内容を `/etc/nginx/snippets/pickle-stars.conf` に保存し、
+elefolo2.com の **HTTPS 側の** `server { ... }` ブロックの中に 1 行追加します:
+
+```nginx
+server {
+    server_name elefolo2.com;
+    listen 443 ssl;
+    # ...既存の設定...
+    include /etc/nginx/snippets/pickle-stars.conf;
+}
+```
 
 ```bash
-sudo cp /opt/pickle-stars/deploy/nginx-pickle-stars.conf /etc/nginx/sites-available/pickle-stars
-sudo nano /etc/nginx/sites-available/pickle-stars   # server_name を自分のドメインに変更
-sudo ln -s /etc/nginx/sites-available/pickle-stars /etc/nginx/sites-enabled/
-sudo rm -f /etc/nginx/sites-enabled/default
 sudo nginx -t && sudo systemctl reload nginx
 ```
 
-この時点で `http://example.com` で遊べます。
+このスニペットは `/games/pickle_stars`（末尾スラッシュなし）を `/games/pickle_stars/` へ転送します。
+クライアントはアセットと WebSocket を相対パスで参照しているため、末尾スラッシュが無いと正しく読み込めません。
+HTTPS で開けば WebSocket は自動的に `wss://elefolo2.com/games/pickle_stars/ws` に接続します。
 
-## 6. HTTPS 化 (Let's Encrypt)
+### 6. GitHub の Secrets を登録
 
-```bash
-sudo apt-get install -y certbot python3-certbot-nginx
-sudo certbot --nginx -d example.com
-```
+リポジトリの **Settings → Secrets and variables → Actions → New repository secret** で登録します。
 
-certbot が nginx 設定に HTTPS を追記し、自動更新も設定します。
-ページを HTTPS で開くと、クライアントは自動的に `wss://` で接続します。
+| 名前 | 内容 |
+|---|---|
+| `SSH_HOST` | VPS の IP アドレス（またはホスト名） |
+| `SSH_USER` | `gameadmin` |
+| `SSH_PORT` | SSH のポート（22 なら登録不要） |
+| `SSH_PRIVATE_KEY` | 秘密鍵ファイル `pickle_deploy` の中身全体（`-----BEGIN` から `END ... KEY-----` まで） |
+| `SSH_KNOWN_HOSTS` | 手元で `ssh-keyscan -p <SSHのポート> <VPSのIP>` を実行した出力全体 |
 
-## 更新するとき
+`SSH_KNOWN_HOSTS` は接続先が本物の VPS かを確かめるためのものです（なりすまし対策）。
 
-```bash
-sudo -u pickle bash /opt/pickle-stars/deploy/update.sh
-sudo systemctl restart pickle-stars
-```
+登録したら Actions タブの Deploy ワークフローを「Run workflow」で実行するか、main に push します。
+成功すると https://elefolo2.com/games/pickle_stars/ で遊べます。
 
-ゲームサーバーを再起動すると、その時点で対戦中の試合は切断されます。
+## 運用
 
-## 環境変数
+- ログ: `journalctl -u pickle-stars -f`
+- 状態確認: `curl https://elefolo2.com/games/pickle_stars/healthz`
+- デプロイ（再起動）の瞬間に対戦中だった試合は切断されます。
+- さくらのパケットフィルターや ufw で SSH の接続元を絞っている場合は、GitHub Actions から届くようにしておいてください。
+
+## 環境変数（systemd ユニットで設定）
 
 | 変数 | 既定値 | 内容 |
 |---|---|---|
