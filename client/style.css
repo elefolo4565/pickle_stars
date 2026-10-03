@@ -267,6 +267,12 @@ html, body {
   touch-action: none; cursor: pointer;
 }
 .shot.down { transform: translateY(3px) scale(0.96); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.22), 0 1px 0 var(--ink); }
+.shot.auto::after {
+  content: 'オート'; position: absolute; left: 50%; top: -12px; transform: translateX(-50%);
+  font-size: 12px; line-height: 1; padding: 3px 7px; border-radius: 8px;
+  background: #fff; color: var(--ink); border: 2px solid var(--ink); white-space: nowrap; pointer-events: none;
+  text-shadow: none; width: max-content;
+}
 .shot.drive { width: 116px; height: 116px; right: 0; bottom: 0; background: var(--red); font-size: 24px; }
 .shot.soft { width: 88px; height: 88px; right: 128px; bottom: 6px; background: var(--blue); font-size: 17px; }
 .shot.lob { width: 88px; height: 88px; right: 18px; bottom: 124px; background: var(--yellow); font-size: 18px; }
