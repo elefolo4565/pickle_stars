@@ -1,0 +1,24 @@
+# /etc/systemd/system/pickle-stars.service
+[Unit]
+Description=Pickle Stars game server
+After=network.target
+
+[Service]
+Type=simple
+User=pickle
+WorkingDirectory=/opt/pickle-stars
+Environment=NODE_ENV=production
+Environment=PORT=3000
+# nginx 経由でのみ受け付ける
+Environment=HOST=127.0.0.1
+ExecStart=/usr/bin/node server/index.js
+Restart=always
+RestartSec=2
+# 最低限のサンドボックス
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

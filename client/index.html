@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#1d4fd8" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>ピックルスターズ - オンライン対戦ピックルボール</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><circle cx='50' cy='50' r='44' fill='%23e9ff3b' stroke='%231b1424' stroke-width='8'/><circle cx='38' cy='36' r='6' fill='%231b1424'/><circle cx='62' cy='36' r='6' fill='%231b1424'/><circle cx='34' cy='62' r='6' fill='%231b1424'/><circle cx='66' cy='62' r='6' fill='%231b1424'/></svg>" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Mochiy+Pop+One&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="gl"></div>
+
+  <div id="ui">
+    <!-- タイトル -->
+    <section id="scr-title" class="screen">
+      <div class="title-left">
+        <div class="logo"><span class="l1">PICKLE</span><span class="l2">STARS</span></div>
+        <div class="logo-sub">ピックルスターズ</div>
+        <label class="name-row">
+          <span>なまえ</span>
+          <input id="inp-name" maxlength="12" autocomplete="off" />
+        </label>
+        <div class="menu">
+          <button class="btn green big" id="btn-quick">クイックマッチ</button>
+          <div class="row">
+            <button class="btn blue" id="btn-create">ルームを作る</button>
+            <button class="btn blue" id="btn-join">ルームに参加</button>
+          </div>
+          <button class="btn yellow" id="btn-cpu">CPUと練習</button>
+          <div class="row">
+            <button class="btn gray small" id="btn-howto">あそびかた</button>
+            <button class="btn gray small" id="btn-sound">サウンド: ON</button>
+            <button class="btn gray small only-touch" id="btn-full">全画面</button>
+          </div>
+        </div>
+      </div>
+      <div class="title-right">
+        <div class="char-card">
+          <button class="arrow" id="char-prev" aria-label="前のキャラ">◀</button>
+          <div class="char-info">
+            <div class="char-title" id="char-title"></div>
+            <div class="char-name" id="char-name"></div>
+            <div class="char-desc" id="char-desc"></div>
+          </div>
+          <button class="arrow" id="char-next" aria-label="次のキャラ">▶</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ダイアログ類 -->
+    <div id="modal" class="modal hidden">
+      <div class="panel" id="pnl-create">
+        <h2>ルームを作る</h2>
+        <div class="opt-label">ポイント数</div>
+        <div class="seg" data-name="points">
+          <button data-v="5">5点</button><button data-v="7">7点</button><button data-v="11" class="on">11点</button><button data-v="15">15点</button>
+        </div>
+        <div class="opt-label">得点方式</div>
+        <div class="seg" data-name="scoring">
+          <button data-v="rally" class="on">ラリーポイント</button><button data-v="sideout">サイドアウト(公式)</button>
+        </div>
+        <div class="row">
+          <button class="btn gray" data-close>もどる</button>
+          <button class="btn green" id="btn-create-go">作成する</button>
+        </div>
+      </div>
+
+      <div class="panel" id="pnl-join">
+        <h2>ルームに参加</h2>
+        <p>友だちに教えてもらった 4 文字のコードを入力</p>
+        <input id="inp-code" class="code-input" maxlength="4" autocomplete="off" autocapitalize="characters" />
+        <div class="row">
+          <button class="btn gray" data-close>もどる</button>
+          <button class="btn green" id="btn-join-go">参加する</button>
+        </div>
+      </div>
+
+      <div class="panel" id="pnl-cpu">
+        <h2>CPUと練習</h2>
+        <div class="opt-label">強さ</div>
+        <div class="seg" data-name="level">
+          <button data-v="0">かんたん</button><button data-v="1" class="on">ふつう</button><button data-v="2">つよい</button>
+        </div>
+        <div class="opt-label">ポイント数</div>
+        <div class="seg" data-name="cpupoints">
+          <button data-v="5">5点</button><button data-v="7" class="on">7点</button><button data-v="11">11点</button>
+        </div>
+        <div class="row">
+          <button class="btn gray" data-close>もどる</button>
+          <button class="btn yellow" id="btn-cpu-go">スタート</button>
+        </div>
+      </div>
+
+      <div class="panel" id="pnl-wait">
+        <h2 id="wait-title">対戦相手をさがしています</h2>
+        <div class="spinner"></div>
+        <div id="wait-room" class="hidden">
+          <p>このコードを友だちに伝えてね</p>
+          <div class="code-big" id="wait-code">----</div>
+          <button class="btn blue small" id="btn-share">招待リンクをコピー</button>
+          <div class="wait-rule" id="wait-rule"></div>
+        </div>
+        <div class="row">
+          <button class="btn gray" id="btn-wait-cancel">キャンセル</button>
+        </div>
+      </div>
+
+      <div class="panel wide" id="pnl-howto">
+        <h2>あそびかた</h2>
+        <div class="howto">
+          <h3>そうさ</h3>
+          <table>
+            <tr><th></th><th>PC</th><th>スマホ</th></tr>
+            <tr><td>移動</td><td>WASD / 矢印キー</td><td>画面左をドラッグ</td></tr>
+            <tr><td class="c-red">強打</td><td>J / スペース</td><td>赤ボタン</td></tr>
+            <tr><td class="c-blue">ソフト</td><td>K</td><td>青ボタン</td></tr>
+            <tr><td class="c-yellow">ロブ</td><td>L</td><td>黄ボタン</td></tr>
+            <tr><td>エモート</td><td>1〜8</td><td>右上の顔ボタン</td></tr>
+          </table>
+          <ul>
+            <li>ボタンを押すと<b>構え</b>、ボールが届く範囲に来たら<b>一番いい打点で自動で打ちます</b>。押しっぱなしで構えを続けられます。</li>
+            <li>打つ瞬間の移動方向で<b>狙い</b>が変わります（左右＝コース、前＝深く、後ろ＝浅く）。サイドラインぎりぎりを狙うほどアウトのリスクも上がります。</li>
+            <li>ボールの横（体から少し離れた位置）で打つと<b>ナイスショット</b>。近すぎ・遠すぎ・低すぎると打球が乱れます。</li>
+            <li>高いボールを強打すると<b>スマッシュ</b>！ ソフトはネット際に落とすドロップ/ディンク、ロブは相手の頭上を越える高い球です。</li>
+            <li>黄色い輪は、相手の打球の<b>着地予想地点</b>です。</li>
+          </ul>
+          <h3>ルール（ピックルボール）</h3>
+          <ul>
+            <li>サーブは下から打ち、<b>対角のサービスコート</b>に入れます（キッチンに落ちたらフォルト）。</li>
+            <li><b>ツーバウンドルール</b>：サーブを返す側と、その返球を打つ側は、どちらも1回バウンドさせてから打ちます。そのあとはノーバウンド（ボレー）もOK。</li>
+            <li><b>キッチン</b>（ネット前の明るいエリア）の中ではボレーできません。バウンドした球なら打てます。</li>
+            <li>アウト・ネット・2回バウンドで失点。<b>規定の点数を先取（2点差が必要）</b>で勝利。</li>
+            <li>得点方式：<b>ラリーポイント</b>はラリーに勝った方に毎回得点。<b>サイドアウト</b>はサーブ側だけが得点できる公式ルールです。</li>
+          </ul>
+        </div>
+        <div class="row">
+          <button class="btn green" data-close>わかった！</button>
+        </div>
+      </div>
+
+      <div class="panel" id="pnl-result">
+        <div class="result-title" id="result-title">勝利！</div>
+        <div class="result-score" id="result-score">11 - 7</div>
+        <div class="result-status" id="result-status"></div>
+        <div class="row">
+          <button class="btn gray" id="btn-menu">メニューへ</button>
+          <button class="btn green" id="btn-rematch">もう一度</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 試合中 HUD -->
+    <section id="hud" class="hidden">
+      <div class="score-board">
+        <div class="sb-side me">
+          <div class="sb-name" id="sb-me-name">あなた</div>
+          <div class="sb-score"><span class="serve-dot" id="sb-me-serve">●</span><span id="sb-me">0</span></div>
+        </div>
+        <div class="sb-mid" id="sb-rule">11点</div>
+        <div class="sb-side opp">
+          <div class="sb-name" id="sb-opp-name">あいて</div>
+          <div class="sb-score"><span id="sb-opp">0</span><span class="serve-dot" id="sb-opp-serve">●</span></div>
+        </div>
+      </div>
+      <button class="hud-btn" id="btn-exit" aria-label="やめる">✕</button>
+      <div class="ping" id="ping"></div>
+      <button class="hud-btn emote-btn" id="btn-emote" aria-label="エモート">😀</button>
+      <div class="emote-menu hidden" id="emote-menu"></div>
+
+      <div class="msg" id="msg"><div class="msg-big"></div><div class="msg-small"></div></div>
+      <div class="feedback" id="feedback"></div>
+
+      <div class="touch-zone only-touch" id="touch-zone"></div>
+      <div class="joy-base only-touch" id="joy-base"><div class="joy-knob" id="joy-knob"></div></div>
+      <div class="shot-btns only-touch">
+        <button class="shot soft" id="shot-soft">ソフト</button>
+        <button class="shot lob" id="shot-lob">ロブ</button>
+        <button class="shot drive" id="shot-drive">強打</button>
+      </div>
+      <div class="kb-help only-desktop">移動 WASD　<b class="c-red">J</b> 強打　<b class="c-blue">K</b> ソフト　<b class="c-yellow">L</b> ロブ　(長押しで構え続ける)</div>
+    </section>
+
+    <div id="toast" class="toast hidden"></div>
+    <div id="rotate-hint" class="rotate-hint">📱↻ 横向きがおすすめ</div>
+  </div>
+
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
