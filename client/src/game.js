@@ -301,9 +301,11 @@ export class GameSession {
         this.over = true;
         const win = e.winner === this.you;
         this.chars[e.winner].setMood('win');
-        music.stop(); // ファンファーレを目立たせる
-        if (win) sfx.fanfare();
-        else sfx.lose();
+        // 勝ち・負けのジングル (BGM OFF のときは短い効果音だけ)
+        if (!music.jingle(win ? 'win' : 'lose')) {
+          if (win) sfx.fanfare();
+          else sfx.lose();
+        }
         setTimeout(() => hud.showResult(win, e.score[this.you], e.score[this.opp], this.conn.online), 900);
         break;
       }

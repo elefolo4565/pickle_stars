@@ -56,6 +56,32 @@ const SONGS = {
       'B5 A5 G5 F#5 A5:2 .:2',
     ],
   },
+  // 試合終了のジングル (1 回だけ鳴らす。最後の小節は和音を伸ばして締める)
+  win: {
+    bpm: 160,
+    vol: 0.22,
+    style: 'fanfare',
+    once: true,
+    chords: ['C', 'F', 'G', 'C'],
+    melody: [
+      'G4 C5 E5 G5 . E5 G5:2',
+      'A5 . A5 C6 . A5 C6:2',
+      'B5 . B5 D6 . B5 G5 B5',
+      'C6:8',
+    ],
+  },
+  lose: {
+    bpm: 132,
+    vol: 0.2,
+    style: 'gentle',
+    once: true,
+    chords: ['Dm', 'G', 'C'],
+    melody: [
+      'A5 . F5 D5 . F5 E5 D5',
+      'B4:2 D5:2 F5 E5 D5 B4',
+      'C5:8',
+    ],
+  },
 };
 
 // 16 分音符 16 個ぶんの伴奏パターン
@@ -74,6 +100,20 @@ const STYLES = {
     hat: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15],
     bass: [[0, 'r'], [2, 'o'], [4, 'r'], [6, 'o'], [8, 'r'], [10, 'o'], [12, 'f'], [14, 'o']],
     stab: [2, 6, 10, 13],
+  },
+  fanfare: {
+    kick: [0, 4, 8, 12],
+    snare: [4, 12, 14],
+    hat: [0, 2, 4, 6, 8, 10, 12, 14],
+    bass: [[0, 'r'], [4, 'o'], [8, 'r'], [12, 'o']],
+    stab: [0, 6, 10],
+  },
+  gentle: {
+    kick: [0, 8],
+    snare: [],
+    hat: [4, 12],
+    bass: [[0, 'r'], [8, 'f']],
+    stab: [4, 12],
   },
 };
 
@@ -174,13 +214,16 @@ class Player {
     this.stepDur = 60 / this.song.bpm / 4;
     this.out = ctx.createGain();
     this.out.gain.setValueAtTime(0.0001, ctx.currentTime);
-    this.out.gain.exponentialRampToValueAtTime(this.song.vol, ctx.currentTime + 0.6);
+    // ジングルは頭から聞こえるようにすぐ立ち上げる
+    this.out.gain.exponentialRampToValueAtTime(this.song.vol, ctx.currentTime + (this.song.once ? 0.03 : 0.6));
     this.out.connect(ctx.destination);
     // メロディと伴奏は少しこもらせて耳に痛くないようにする
     this.tone = ctx.createBiquadFilter();
     this.tone.type = 'lowpass';
     this.tone.frequency.value = 2600;
     this.tone.connect(this.out);
+    this.once = !!this.song.once;
+    this.done = false;
     this.step = 0;
     this.next = ctx.currentTime + 0.08;
     this.timer = setInterval(() => this.pump(), 25);
@@ -191,10 +234,40 @@ class Player {
     // タブが裏に回るなどで大きく遅れたら、今の時刻から続ける
     if (this.next < ctx.currentTime - 0.1) this.next = ctx.currentTime + 0.05;
     while (this.next < ctx.currentTime + 0.15) {
+      if (this.once && this.step >= this.data.steps - 16) {
+        this.finale(this.next);
+        return;
+      }
       this.play(this.step, this.next);
       this.next += this.stepDur;
       this.step = (this.step + 1) % this.data.steps;
     }
+  }
+
+  /** ジングルの最後の小節: 和音とメロディを伸ばして余韻を残し、鳴り終わったら片付ける */
+  finale(t) {
+    const { ctx, out, tone, stepDur } = this;
+    clearInterval(this.timer);
+    this.done = true;
+    const chord = this.data.chords[this.data.chords.length - 1];
+    const note = this.data.lead[this.data.steps - 16];
+    const dur = 16 * stepDur;
+    if (note) {
+      osc(ctx, tone, 'square', freq(note.n), t, dur, 0.09, 0.01);
+      osc(ctx, tone, 'triangle', freq(note.n), t, dur, 0.12, 0.01);
+    }
+    for (const n of chord.tones) osc(ctx, tone, 'sawtooth', freq(n), t, dur, 0.04, 0.01);
+    osc(ctx, out, 'triangle', freq(chord.root), t, dur, 0.55, 0.01);
+    if (this.song.style === 'fanfare') {
+      // シンバル代わりのノイズと、締めの 2 連打
+      noiseHit(ctx, out, t, 1.2, 'highpass', 5000, 0.25);
+      noiseHit(ctx, out, t, 0.13, 'bandpass', 1900, 0.4);
+    }
+    const out2 = this.out;
+    setTimeout(() => {
+      out2.disconnect();
+      if (current === this) current = null;
+    }, (t - ctx.currentTime + dur + 0.5) * 1000);
   }
 
   play(step, t) {
@@ -237,6 +310,7 @@ class Player {
 
   stop(fade = 0.5) {
     clearInterval(this.timer);
+    if (current === this) current = null;
     const t = this.ctx.currentTime;
     this.out.gain.cancelScheduledValues(t);
     this.out.gain.setValueAtTime(Math.max(0.0001, this.out.gain.value), t);
@@ -258,6 +332,8 @@ function sync() {
   const ctx = audioContext();
   const key = enabled && ctx ? wanted : null;
   if (current && current.key === key) return;
+  // 鳴っている途中のジングルは、別の曲に切り替えるか BGM OFF にしたときだけ止める
+  if (current?.once && key === null && enabled) return;
   if (current) current.stop();
   current = key ? new Player(ctx, key) : null;
 }
@@ -267,6 +343,18 @@ export const music = {
   play(key) {
     wanted = key;
     sync();
+  },
+  /**
+   * 試合終了のジングル ('win' / 'lose') を 1 回だけ鳴らす。BGM は止める。
+   * BGM OFF や音声が使えないときは false を返す (呼び出し側で効果音に切り替える)
+   */
+  jingle(key) {
+    wanted = null;
+    if (current) current.stop(0.2);
+    const ctx = audioContext();
+    if (!enabled || !ctx || ctx.state !== 'running') return false;
+    current = new Player(ctx, key);
+    return true;
   },
   /** フェードアウトして止める */
   stop() {
