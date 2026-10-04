@@ -351,8 +351,22 @@ EMOJIS.forEach((e, i) => {
 });
 $('btn-emote').addEventListener('click', () => emoteMenu.classList.toggle('hidden'));
 
-// タッチ操作 (スマホではオート打ち返しを使う)
-input.setAutoHit(IS_TOUCH);
+// オート打ち返し (PC・スマホ共通。タイトル画面で切り替え)
+input.setAutoHit(load('ps_auto', '1') !== '0');
+function updateAutoBtn() {
+  $('btn-auto').textContent = `自動打ち返し: ${input.autoHit ? 'ON' : 'OFF'}`;
+}
+updateAutoBtn();
+$('btn-auto').addEventListener('click', () => {
+  input.setAutoHit(!input.autoHit);
+  save('ps_auto', input.autoHit ? '1' : '0');
+  updateAutoBtn();
+});
+document.querySelectorAll('.kb-help [data-shot]').forEach((el) => {
+  input.addShotMark(/** @type {HTMLElement} */ (el), SHOT[/** @type {HTMLElement} */ (el).dataset.shot]);
+});
+
+// タッチ操作
 input.attachJoystick($('touch-zone'), $('joy-base'), $('joy-knob'));
 input.attachButton($('shot-drive'), SHOT.DRIVE);
 input.attachButton($('shot-soft'), SHOT.SOFT);
