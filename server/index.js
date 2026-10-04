@@ -12,7 +12,7 @@ const PORT = Number(process.env.PORT) || 3000;
 const HOST = process.env.HOST || '0.0.0.0';
 const ROOT = path.resolve(fileURLToPath(new URL('../dist', import.meta.url)));
 const MAX_ROOMS = Number(process.env.MAX_ROOMS) || 500;
-const CHAR_COUNT = 6;
+const CHAR_COUNT = 7;
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
