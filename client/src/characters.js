@@ -512,7 +512,7 @@ export class Chibi {
       });
     }
     this.glb = new GlbBody(gltf, this.model, 1.85);
-    this.glb.play('wait');
+    this.glb.play(null);
   }
 
   /** glb の腕・アニメを Chibi の姿勢に合わせる */
@@ -521,7 +521,7 @@ export class Chibi {
     if (this.mood === 'win') g.play('cheer');
     else if (this.mood === 'lose') g.play('defeat_03');
     else if (speed > 0.6) g.play('run', Math.min(0.6 + speed / 5, 1.4));
-    else g.play('wait');
+    else g.play(null);
     g.update(dt);
 
     this.root.updateMatrixWorld(true);
