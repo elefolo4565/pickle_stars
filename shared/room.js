@@ -112,6 +112,9 @@ export class Room {
       case 'sw':
         if (SHOTS.has(msg.s)) m.swing(idx, msg.s);
         break;
+      case 'dv':
+        m.dive(idx);
+        break;
       case 'hit': {
         if (!SHOTS.has(msg.s)) return;
         const err = m.hit(idx, +msg.k, msg.s, +msg.ax, +msg.ay, +msg.x, +msg.z, !!msg.dv);

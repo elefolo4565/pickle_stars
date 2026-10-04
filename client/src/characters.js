@@ -552,6 +552,11 @@ export class Chibi {
     this.strike(kind);
   }
 
+  /** 飛びついて倒れ込んでいる最中か */
+  diving() {
+    return !!this.diveState && this.diveState.t < 0.42;
+  }
+
   showEmote(i) {
     this.emote.material.map = getEmojiTexture(i);
     this.emote.material.needsUpdate = true;

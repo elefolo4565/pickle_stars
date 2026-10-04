@@ -337,6 +337,7 @@ input.attachJoystick($('touch-zone'), $('joy-base'), $('joy-knob'));
 input.attachButton($('shot-drive'), SHOT.DRIVE);
 input.attachButton($('shot-soft'), SHOT.SOFT);
 input.attachButton($('shot-lob'), SHOT.LOB);
+input.attachDiveButton($('shot-dive'));
 
 // ---------- メインループ ----------
 let last = performance.now();
