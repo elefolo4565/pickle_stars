@@ -23,6 +23,7 @@ const MIME = {
   '.svg': 'image/svg+xml',
   '.ico': 'image/x-icon',
   '.webmanifest': 'application/manifest+json',
+  '.glb': 'model/gltf-binary',
 };
 
 const now = () => performance.now();

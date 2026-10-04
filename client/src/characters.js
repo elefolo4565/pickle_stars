@@ -1,6 +1,7 @@
 // ブロスタくらいの頭身 (約2.5頭身) のキャラクターをプリミティブで組み立て、手続き的にアニメーションさせる
 import * as THREE from 'three';
 import { toonMesh, GEO, capsule, roundedPlate } from './toon.js';
+import { loadModel, GlbBody } from './glbModel.js';
 
 const HR = 0.36; // 頭の半径
 const HIP_Y = 0.42;
@@ -16,6 +17,7 @@ const SKIN = 0xffd2b0;
  * @property {number} [width] 体の横幅倍率
  * @property {(ctx: BuildCtx) => void} deco
  * @property {(p: {body: THREE.Group, arms: THREE.Group[], legs: THREE.Group[]}) => void} [dress] 胴体・手足の飾り
+ * @property {string} [model] glb モデルのパス。読み込めたらプリミティブの体と差し替える
  */
 
 /** @type {CharDef[]} */
@@ -145,6 +147,7 @@ export const CHARACTERS = [
     title: 'マジカルスター',
     desc: 'リボンとフリルの魔法少女。きらきらの瞳でボールを見逃さない。',
     color: 0xe8609a,
+    model: 'models/choruko.glb',
     c: {
       skin: SKIN, shirt: 0xf27aaa, pants: 0xe8609a, shoe: 0xd02a7a, paddle: 0xd02a7a, hand: SKIN,
       arm: SKIN, leg: SKIN, skirt: { r: 0.4, h: 0.34 },
@@ -374,6 +377,9 @@ function getEmojiTexture(i) {
 }
 export { EMOJIS };
 
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+
 export class Chibi {
   /** @param {number} charIdx */
   constructor(charIdx) {
@@ -466,6 +472,7 @@ export class Chibi {
     stripe.rotation.y = Math.PI / 2;
     paddle.add(stripe);
     this.armR.add(paddle);
+    this.paddle = paddle;
 
     // 胴体・手足の追加装飾 (服の飾りなど)
     def.dress?.({ body: this.body, arms: [this.armL, this.armR], legs: this.legs });
@@ -486,6 +493,45 @@ export class Chibi {
     this.mood = null; // 'win' | 'lose'
     this.moodT = 0;
     this.diveState = null;
+
+    this.glb = null;
+    if (def.model) {
+      loadModel(def.model)
+        .then((gltf) => this.useGlb(gltf))
+        .catch((e) => console.warn('model load failed', def.model, e));
+    }
+  }
+
+  /** 読み込んだ glb を表示し、プリミティブの体はパドル以外を隠す */
+  useGlb(gltf) {
+    const keep = new Set();
+    this.paddle.traverse((o) => keep.add(o));
+    for (const part of [this.body, ...this.legs]) {
+      part.traverse((o) => {
+        if (o.isMesh && !keep.has(o)) o.visible = false;
+      });
+    }
+    this.glb = new GlbBody(gltf, this.model, 1.85);
+    this.glb.play('wait');
+  }
+
+  /** glb の腕・アニメを Chibi の姿勢に合わせる */
+  updateGlb(dt, speed) {
+    const g = this.glb;
+    if (this.mood === 'win') g.play('cheer');
+    else if (this.mood === 'lose') g.play('defeat_03');
+    else if (speed > 0.6) g.play('run', Math.min(0.6 + speed / 5, 1.4));
+    else g.play('wait');
+    g.update(dt);
+
+    this.root.updateMatrixWorld(true);
+    for (const [arm, garm] of [[this.armL, g.armL], [this.armR, g.armR]]) {
+      arm.getWorldPosition(_v1);
+      arm.localToWorld(_v2.set(0, -1, 0)).sub(_v1).normalize();
+      g.aimArm(garm, _v2);
+    }
+    // パドルを glb の手の位置へ
+    this.armR.worldToLocal(g.handWorld(g.armR, this.paddle.position));
   }
 
   /** 構え (バックスイング) */
@@ -581,6 +627,7 @@ export class Chibi {
     }
 
     this.updateDive(dt);
+    if (this.glb) this.updateGlb(dt, speed);
 
     // エモート
     if (this.emote.visible) {
@@ -629,6 +676,7 @@ export class Chibi {
 
   /** 左手のワールド座標 (サーブ前にボールを持たせる) */
   leftHandWorld(out) {
+    if (this.glb) return this.glb.handWorld(this.glb.armL, out);
     out.set(0, -0.32, 0.05);
     return this.armL.localToWorld(out);
   }
