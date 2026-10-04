@@ -34,6 +34,7 @@ export const SWING_WINDOW = 0.4; // ボタンを押してから打てる猶予 (
 export const DIVE_REACH = 2.3;
 export const DIVE_QUALITY = 0.62;
 export const DIVE_RECOVER = 0.7; // 飛びついたあと起き上がるまで動けない時間 (秒)
+export const DIVE_WINDOW = 0.25; // ダイブボタンを押してから、飛びついて打てる猶予 (秒)
 export const PLAYER_BOUNDS_X = 6.5;
 export const PLAYER_BOUNDS_Z = 10.5;
 export const PLAYER_NET_GAP = 0.3;

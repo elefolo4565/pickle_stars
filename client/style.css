@@ -162,6 +162,7 @@ html, body {
   color: var(--ink);
   cursor: pointer;
 }
+.seg.small button { font-size: 13px; padding: 6px 9px; }
 .seg button.on { background: var(--yellow); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2); }
 .panel .row { margin-top: 14px; }
 .code-input {
@@ -194,6 +195,7 @@ html, body {
 .c-red { color: #ff8a95 !important; }
 .c-blue { color: #8fd0ff !important; }
 .c-yellow { color: #ffe066 !important; }
+.c-green { color: #8cf08f !important; }
 .result-title { font-size: 54px; margin: 4px 0; }
 .result-title.win { color: var(--yellow); }
 .result-title.lose { color: #c6d4ff; }
@@ -278,6 +280,7 @@ html, body {
 .shot.drive { width: 116px; height: 116px; right: 0; bottom: 0; background: var(--red); font-size: 24px; }
 .shot.soft { width: 88px; height: 88px; right: 128px; bottom: 6px; background: var(--blue); font-size: 17px; }
 .shot.lob { width: 88px; height: 88px; right: 18px; bottom: 124px; background: var(--yellow); font-size: 18px; }
+.shot.dive { width: 76px; height: 76px; right: 124px; bottom: 108px; background: var(--green); font-size: 15px; }
 .kb-help {
   position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
   font-size: 13px; background: rgba(15, 30, 90, 0.6); padding: 6px 14px; border-radius: 10px; white-space: nowrap;

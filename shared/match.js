@@ -48,6 +48,7 @@ function makePlayer(idx) {
     swingShot: SHOT.DRIVE,
     emote: 0,
     emoteSeq: 0,
+    diveSeq: 0, // 自分から飛びついた回数 (相手の画面で飛びつきを見せるため)
     moveBudget: MOVE_BUDGET_MAX, // クライアント申告の移動量の上限 (ワープ対策)
   };
 }
@@ -130,6 +131,11 @@ export class Match {
     const pl = this.players[idx];
     pl.swingSeq++;
     pl.swingShot = shot;
+  }
+
+  /** 自分から飛びついた (打球の判定は hit で行う。ここは見た目を相手に伝えるだけ) */
+  dive(idx) {
+    this.players[idx].diveSeq++;
   }
 
   emote(idx, id) {
@@ -283,7 +289,7 @@ export class Match {
       sc: this.score,
       b: this.rally,
       pl: this.players.map((p) => [
-        p.x, p.z, p.ry, p.rs, p.swingSeq, p.swingShot, p.emote, p.emoteSeq,
+        p.x, p.z, p.ry, p.rs, p.swingSeq, p.swingShot, p.emote, p.emoteSeq, p.diveSeq,
       ]),
     };
   }
