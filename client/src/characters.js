@@ -1,6 +1,7 @@
 // ブロスタくらいの頭身 (約2.5頭身) のキャラクターをプリミティブで組み立て、手続き的にアニメーションさせる
 import * as THREE from 'three';
 import { toonMesh, GEO, capsule, roundedPlate } from './toon.js';
+import { loadModel, GlbBody } from './glbModel.js';
 
 const HR = 0.36; // 頭の半径
 const HIP_Y = 0.42;
@@ -15,6 +16,8 @@ const SKIN = 0xffd2b0;
  * @property {object} c 各パーツの色
  * @property {number} [width] 体の横幅倍率
  * @property {(ctx: BuildCtx) => void} deco
+ * @property {(p: {body: THREE.Group, arms: THREE.Group[], legs: THREE.Group[]}) => void} [dress] 胴体・手足の飾り
+ * @property {string} [model] glb モデルのパス。読み込めたらプリミティブの体と差し替える
  */
 
 /** @type {CharDef[]} */
@@ -139,11 +142,120 @@ export const CHARACTERS = [
       b.head(GEO.sphere, 0xffb3c1, [0.065, 0.065, 0.03], [0.27, HR * 1.85, 0.05], { outline: false });
     },
   },
+  {
+    name: 'ちょるこ',
+    title: 'マジカルスター',
+    desc: 'リボンとフリルの魔法少女。きらきらの瞳でボールを見逃さない。',
+    color: 0xe8609a,
+    model: 'models/choruko.glb',
+    c: {
+      skin: SKIN, shirt: 0xf27aaa, pants: 0xe8609a, shoe: 0xd02a7a, paddle: 0xd02a7a, hand: SKIN,
+      arm: SKIN, leg: SKIN, skirt: { r: 0.4, h: 0.34 },
+    },
+    deco(b) {
+      const HAIR = 0xf7a1b8;
+      const RIB = 0xc8247a;
+      b.eyes('star');
+      b.mouth('smile');
+      b.blush();
+      // 後ろ髪・ボブ
+      b.head(GEO.sphere, HAIR, [HR * 1.08, HR * 1.04, HR * 1.04], [0, HR + 0.05, -0.08]);
+      b.head(GEO.sphere, HAIR, [HR * 1.04, HR * 0.62, HR * 0.92], [0, HR - 0.12, -0.12]);
+      // 流した前髪と顔まわりの髪
+      b.head(GEO.sphere, HAIR, [HR * 0.98, HR * 0.38, HR * 0.6], [0.03, HR + 0.24, 0.12], { rz: -0.2 });
+      for (const s of [-1, 1]) b.head(GEO.sphere, HAIR, [0.08, 0.19, 0.08], [s * 0.29, HR - 0.07, 0.1], { rz: s * 0.1 });
+      // くるくるのツインテール
+      for (const s of [-1, 1]) {
+        b.head(GEO.sphere, HAIR, [0.14, 0.14, 0.13], [s * 0.42, HR + 0.07, -0.06]);
+        b.head(GEO.sphere, HAIR, [0.13, 0.13, 0.12], [s * 0.49, HR - 0.07, -0.03]);
+        b.head(GEO.sphere, HAIR, [0.12, 0.12, 0.11], [s * 0.43, HR - 0.17, -0.1]);
+        // 羽のようなリボン
+        const knot = [s * 0.36, HR + 0.26, -0.02];
+        b.head(GEO.sphere, RIB, [0.15, 0.065, 0.035], [knot[0] + s * 0.07, knot[1] + 0.1, knot[2]], { rz: s * 0.95, outline: 0.014 });
+        b.head(GEO.sphere, RIB, [0.14, 0.06, 0.035], [knot[0] + s * 0.13, knot[1] + 0.03, knot[2]], { rz: s * 0.3, outline: 0.014 });
+        b.head(GEO.sphere, RIB, [0.045, 0.045, 0.04], knot, { outline: 0.012 });
+      }
+      // アホ毛
+      b.head(new THREE.TorusGeometry(0.07, 0.016, 6, 12, Math.PI * 0.9), HAIR, [1, 1, 1], [-0.05, HR * 2 - 0.01, 0.02], { outline: 0.01, rz: 0.5 });
+    },
+    dress({ body, arms, legs }) {
+      const LIGHT = 0xffc6dc;
+      const RIB = 0xc8247a;
+      const PURPLE = 0x9b4fb0;
+      // スカートのすそ (紫のライン + 白いフリル)
+      part(body, RING_GEO, PURPLE, [0.38, 0.38, 0.5], [0, -0.085, 0], [Math.PI / 2, 0, 0], { outline: false });
+      for (let i = 0; i < 14; i++) {
+        const a = (i / 14) * Math.PI * 2;
+        part(body, GEO.sphereLow, 0xffffff, [0.06, 0.045, 0.06], [Math.sin(a) * 0.38, -0.115, Math.cos(a) * 0.33], [0, 0, 0], { outline: 0.012 });
+      }
+      // 胸の大きなリボン
+      ribbon(body, RIB, [0, 0.37, 0.2], 0.095, { tilt: 0.3 });
+      // えりのフリル
+      for (let i = 0; i < 8; i++) {
+        const a = (i / 8) * Math.PI * 2;
+        part(body, GEO.sphereLow, LIGHT, [0.05, 0.035, 0.05], [Math.sin(a) * 0.1, 0.5, Math.cos(a) * 0.09], [0, 0, 0], { outline: 0.01 });
+      }
+      // 腰の後ろの紫リボンと長いリボンのすそ
+      ribbon(body, PURPLE, [0, 0.14, -0.22], 0.12, { tilt: -0.35 });
+      for (const s of [-1, 1]) {
+        part(body, GEO.cone, PURPLE, [0.09, 0.4, 0.03], [s * 0.3, -0.12, -0.2], [-0.35, s * 0.4, -s * 2.3], { outline: 0.014 });
+      }
+      // ふくらんだ袖と手首のフリル
+      for (const arm of arms) {
+        part(arm, GEO.sphere, LIGHT, [0.13, 0.12, 0.13], [0, -0.06, 0]);
+        part(arm, RING_GEO, LIGHT, [0.08, 0.08, 0.8], [0, -0.2, 0], [Math.PI / 2, 0, 0], { outline: 0.01 });
+      }
+      // くつしたのフリル
+      for (const leg of legs) {
+        part(leg, RING_GEO, LIGHT, [0.1, 0.1, 0.9], [0, -0.28, 0.01], [Math.PI / 2, 0, 0], { outline: 0.01 });
+      }
+    },
+  },
 ];
 
 /** 頭の表面上の z 座標 */
 function surfZ(x, y) {
   return Math.sqrt(Math.max(0, HR * HR - x * x - y * y));
+}
+
+// 4つ角の星 (瞳のハイライト用)
+const STAR_GEO = (() => {
+  const sh = new THREE.Shape();
+  for (let i = 0; i < 8; i++) {
+    const a = (i / 8) * Math.PI * 2;
+    const r = i % 2 === 0 ? 1 : 0.28;
+    const x = Math.sin(a) * r;
+    const y = Math.cos(a) * r;
+    if (i === 0) sh.moveTo(x, y);
+    else sh.lineTo(x, y);
+  }
+  return new THREE.ShapeGeometry(sh);
+})();
+
+// 服の飾り用
+const RING_GEO = new THREE.TorusGeometry(1, 0.08, 6, 24);
+
+/** グループに輪郭つきの部品を追加する (胴体・手足用) */
+function part(parent, geo, color, scale, pos, rot = [0, 0, 0], opts = {}) {
+  const m = toonMesh(geo, color, opts);
+  m.scale.set(scale[0], scale[1], scale[2]);
+  m.position.set(pos[0], pos[1], pos[2]);
+  m.rotation.set(rot[0], rot[1], rot[2]);
+  parent.add(m);
+  return m;
+}
+
+/** リボン (2つの輪 + 結び目)。tilt: 輪の傾き */
+function ribbon(parent, color, pos, size, opts = {}) {
+  const g = new THREE.Group();
+  g.position.set(pos[0], pos[1], pos[2]);
+  if (opts.ry) g.rotation.y = opts.ry;
+  for (const s of [-1, 1]) {
+    part(g, GEO.sphere, color, [size, size * 0.6, size * 0.4], [s * size * 0.85, 0, 0], [0, 0, s * (opts.tilt ?? 0.25)], { outline: 0.014 });
+  }
+  part(g, GEO.sphere, color, [size * 0.35, size * 0.38, size * 0.35], [0, 0, size * 0.1], [0, 0, 0], { outline: 0.014 });
+  parent.add(g);
+  return g;
 }
 
 class BuildCtx {
@@ -164,6 +276,7 @@ class BuildCtx {
   }
 
   eyes(style = 'normal') {
+    if (style === 'star') return this.starEyes();
     const big = style === 'cute' ? 1.15 : style === 'small' ? 0.8 : 1;
     for (const s of [-1, 1]) {
       const ex = s * 0.13;
@@ -172,6 +285,22 @@ class BuildCtx {
       this.head(GEO.sphere, 0xffffff, [0.075 * big, 0.1 * big, 0.05], [ex, ey, z], { outline: 0.012 });
       this.head(GEO.sphere, 0x1b1424, [0.048 * big, 0.068 * big, 0.04], [ex + s * 0.005, ey - 0.005, z + 0.025], { outline: false });
       this.head(GEO.sphere, 0xffffff, [0.017 * big, 0.02 * big, 0.01], [ex + 0.018, ey + 0.028, z + 0.062], { outline: false });
+    }
+  }
+
+  /** 茶色い瞳に星のハイライト */
+  starEyes(iris = 0x8a2a1e) {
+    for (const s of [-1, 1]) {
+      const ex = s * 0.13;
+      const ey = HR - 0.01;
+      const z = surfZ(ex, -0.01) - 0.035;
+      this.head(GEO.sphere, 0xffffff, [0.085, 0.11, 0.05], [ex, ey, z], { outline: 0.012 });
+      this.head(GEO.sphere, iris, [0.068, 0.088, 0.045], [ex, ey - 0.005, z + 0.012], { outline: false });
+      this.head(GEO.sphere, 0x3a0f12, [0.04, 0.052, 0.04], [ex, ey - 0.005, z + 0.025], { outline: false });
+      const star = new THREE.Mesh(STAR_GEO, new THREE.MeshBasicMaterial({ color: 0xfff3c4 }));
+      star.scale.setScalar(0.034);
+      star.position.set(ex, ey + 0.004, z + 0.068);
+      this.headGroup.add(star);
     }
   }
 
@@ -248,6 +377,9 @@ function getEmojiTexture(i) {
 }
 export { EMOJIS };
 
+const _v1 = new THREE.Vector3();
+const _v2 = new THREE.Vector3();
+
 export class Chibi {
   /** @param {number} charIdx */
   constructor(charIdx) {
@@ -265,7 +397,7 @@ export class Chibi {
     this.legs = [-1, 1].map((s) => {
       const pivot = new THREE.Group();
       pivot.position.set(s * 0.12 * Math.min(w, 1.15), HIP_Y, 0);
-      const leg = toonMesh(capsule(0.095, 0.16), c.pants === 0xffffff ? c.skin : c.pants);
+      const leg = toonMesh(capsule(0.095, 0.16), c.leg ?? (c.pants === 0xffffff ? c.skin : c.pants));
       leg.position.y = -0.17;
       pivot.add(leg);
       const shoe = toonMesh(GEO.sphere, c.shoe);
@@ -282,7 +414,8 @@ export class Chibi {
     this.model.add(this.body);
     if (c.skirt) {
       const skirt = toonMesh(GEO.cone, c.pants);
-      skirt.scale.set(0.33, 0.3, 0.28);
+      const sk = typeof c.skirt === 'object' ? c.skirt : {};
+      skirt.scale.set(sk.r ?? 0.33, sk.h ?? 0.3, (sk.r ?? 0.33) * 0.85);
       skirt.position.y = 0.07;
       this.body.add(skirt);
     } else {
@@ -310,7 +443,7 @@ export class Chibi {
     const mkArm = (s) => {
       const pivot = new THREE.Group();
       pivot.position.set(s * (0.27 * w + 0.03), 0.4, 0);
-      const upper = toonMesh(capsule(0.075, 0.16), c.shirt);
+      const upper = toonMesh(capsule(0.075, 0.16), c.arm ?? c.shirt);
       upper.position.y = -0.13;
       pivot.add(upper);
       const hand = toonMesh(GEO.sphere, c.hand);
@@ -339,6 +472,10 @@ export class Chibi {
     stripe.rotation.y = Math.PI / 2;
     paddle.add(stripe);
     this.armR.add(paddle);
+    this.paddle = paddle;
+
+    // 胴体・手足の追加装飾 (服の飾りなど)
+    def.dress?.({ body: this.body, arms: [this.armL, this.armR], legs: this.legs });
 
     // エモート
     this.emote = new THREE.Sprite(new THREE.SpriteMaterial({ map: getEmojiTexture(0), depthTest: false, transparent: true }));
@@ -356,6 +493,45 @@ export class Chibi {
     this.mood = null; // 'win' | 'lose'
     this.moodT = 0;
     this.diveState = null;
+
+    this.glb = null;
+    if (def.model) {
+      loadModel(def.model)
+        .then((gltf) => this.useGlb(gltf))
+        .catch((e) => console.warn('model load failed', def.model, e));
+    }
+  }
+
+  /** 読み込んだ glb を表示し、プリミティブの体はパドル以外を隠す */
+  useGlb(gltf) {
+    const keep = new Set();
+    this.paddle.traverse((o) => keep.add(o));
+    for (const part of [this.body, ...this.legs]) {
+      part.traverse((o) => {
+        if (o.isMesh && !keep.has(o)) o.visible = false;
+      });
+    }
+    this.glb = new GlbBody(gltf, this.model, 1.85);
+    this.glb.play('wait');
+  }
+
+  /** glb の腕・アニメを Chibi の姿勢に合わせる */
+  updateGlb(dt, speed) {
+    const g = this.glb;
+    if (this.mood === 'win') g.play('cheer');
+    else if (this.mood === 'lose') g.play('defeat_03');
+    else if (speed > 0.6) g.play('run', Math.min(0.6 + speed / 5, 1.4));
+    else g.play('wait');
+    g.update(dt);
+
+    this.root.updateMatrixWorld(true);
+    for (const [arm, garm] of [[this.armL, g.armL], [this.armR, g.armR]]) {
+      arm.getWorldPosition(_v1);
+      arm.localToWorld(_v2.set(0, -1, 0)).sub(_v1).normalize();
+      g.aimArm(garm, _v2);
+    }
+    // パドルを glb の手の位置へ
+    this.armR.worldToLocal(g.handWorld(g.armR, this.paddle.position));
   }
 
   /** 構え (バックスイング) */
@@ -451,6 +627,7 @@ export class Chibi {
     }
 
     this.updateDive(dt);
+    if (this.glb) this.updateGlb(dt, speed);
 
     // エモート
     if (this.emote.visible) {
@@ -499,6 +676,7 @@ export class Chibi {
 
   /** 左手のワールド座標 (サーブ前にボールを持たせる) */
   leftHandWorld(out) {
+    if (this.glb) return this.glb.handWorld(this.glb.armL, out);
     out.set(0, -0.32, 0.05);
     return this.armL.localToWorld(out);
   }

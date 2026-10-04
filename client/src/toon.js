@@ -2,7 +2,7 @@
 import * as THREE from 'three';
 import { mergeVertices } from 'three/addons/utils/BufferGeometryUtils.js';
 
-const gradientMap = (() => {
+export const gradientMap = (() => {
   const tex = new THREE.DataTexture(new Uint8Array([95, 175, 255]), 3, 1, THREE.RedFormat);
   tex.minFilter = THREE.NearestFilter;
   tex.magFilter = THREE.NearestFilter;
