@@ -162,6 +162,7 @@ html, body {
   color: var(--ink);
   cursor: pointer;
 }
+.seg.small button { font-size: 13px; padding: 6px 9px; }
 .seg button.on { background: var(--yellow); box-shadow: inset 0 -4px 0 rgba(0, 0, 0, 0.2); }
 .panel .row { margin-top: 14px; }
 .code-input {
