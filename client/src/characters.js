@@ -379,6 +379,13 @@ function getEmojiTexture(i) {
 }
 export { EMOJIS };
 
+/** glb モデルを先に読み込んでおく (キャラを表示するまでの待ち時間を減らす) */
+export function preloadModels() {
+  for (const def of CHARACTERS) {
+    if (def.model) loadModel(def.model).catch(() => {});
+  }
+}
+
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 
@@ -498,9 +505,14 @@ export class Chibi {
 
     this.glb = null;
     if (def.model) {
+      // 読み込み中は何も見せない (仮の体が一瞬見えないように)。失敗したら仮の体を出す
+      this.model.visible = false;
       loadModel(def.model)
         .then((gltf) => this.useGlb(gltf))
-        .catch((e) => console.warn('model load failed', def.model, e));
+        .catch((e) => console.warn('model load failed', def.model, e))
+        .finally(() => {
+          this.model.visible = true;
+        });
     }
   }
 

@@ -1,6 +1,6 @@
 // アプリ全体の流れ: タイトル → マッチング → 試合 → 結果
 import { GameScene, IS_TOUCH, MENU_CHAR_Z } from './scene.js';
-import { Chibi, CHARACTERS, EMOJIS } from './characters.js';
+import { Chibi, CHARACTERS, EMOJIS, preloadModels } from './characters.js';
 import { Input } from './input.js';
 import { NetConnection, LocalConnection } from './net.js';
 import { GameSession } from './game.js';
@@ -360,6 +360,7 @@ function frame(now) {
 }
 scene.renderer.setAnimationLoop(frame);
 
+preloadModels();
 showMenuChar();
 music.play('menu');
 
