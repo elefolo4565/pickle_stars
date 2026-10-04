@@ -18,6 +18,7 @@ const SKIN = 0xffd2b0;
  * @property {(ctx: BuildCtx) => void} deco
  * @property {(p: {body: THREE.Group, arms: THREE.Group[], legs: THREE.Group[]}) => void} [dress] 胴体・手足の飾り
  * @property {string} [model] glb モデルのパス。読み込めたらプリミティブの体と差し替える
+ * @property {boolean} [calmMenu] キャラ選択画面でバンザイや素振りをせず、立ったままにする
  */
 
 /** @type {CharDef[]} */
@@ -148,6 +149,7 @@ export const CHARACTERS = [
     desc: 'リボンとフリルの魔法少女。きらきらの瞳でボールを見逃さない。',
     color: 0xe8609a,
     model: 'models/choruko.glb',
+    calmMenu: true,
     c: {
       skin: SKIN, shirt: 0xf27aaa, pants: 0xe8609a, shoe: 0xd02a7a, paddle: 0xd02a7a, hand: SKIN,
       arm: SKIN, leg: SKIN, skirt: { r: 0.4, h: 0.34 },

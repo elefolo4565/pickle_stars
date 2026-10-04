@@ -62,8 +62,8 @@ function showMenuChar() {
   ch.root.position.set(0, 0, MENU_CHAR_Z);
   scene.scene.add(ch.root);
   state.menuChar = ch;
-  ch.setMood('win');
   const def = CHARACTERS[state.charIdx];
+  if (!def.calmMenu) ch.setMood('win');
   $('char-name').textContent = def.name;
   $('char-title').textContent = def.title;
   $('char-desc').textContent = def.desc;
@@ -352,7 +352,7 @@ function frame(now) {
     if (state.menuChar) {
       state.menuChar.root.rotation.y = Math.sin(menuTime * 0.7) * 0.5;
       state.menuChar.update(dt, 0);
-      if (!state.menuChar.mood && Math.random() < dt * 0.3) state.menuChar.strike(['fh', 'bh', 'oh'][Math.floor(Math.random() * 3)]);
+      if (!state.menuChar.def.calmMenu && !state.menuChar.mood && Math.random() < dt * 0.3) state.menuChar.strike(['fh', 'bh', 'oh'][Math.floor(Math.random() * 3)]);
     }
     scene.updateMenuCamera(dt, menuTime);
   }
