@@ -7,6 +7,8 @@ const KEY_SHOT = {
   KeyK: SHOT.SOFT,
   KeyL: SHOT.LOB,
 };
+// 好きなタイミングで飛びつく
+const KEY_DIVE = new Set(['ShiftLeft', 'ShiftRight', 'KeyI']);
 
 export class Input {
   constructor() {
@@ -16,6 +18,8 @@ export class Input {
     this.joy = { active: false, id: -1, ox: 0, oy: 0, x: 0, y: 0 };
     this.padPrev = [];
     this.emotePress = -1;
+    this.divePress = false;
+    this.lastShot = SHOT.DRIVE; // 飛びつくときに使うショット (最後に押したもの)
     this.enabled = true;
     // スマホ用オート打ち返し: 最後に押したショットボタンを覚えておき、打てる位置に来たら自動で打つ
     this.autoHit = false;
@@ -32,6 +36,7 @@ export class Input {
         this.setAutoHit(false); // キーボードで打つ人にはオートを使わない
         this.press(s);
       }
+      if (KEY_DIVE.has(e.code)) this.pressDive();
       if (/^Digit[1-8]$/.test(e.code)) this.emotePress = Number(e.code.slice(5)) - 1;
     });
     window.addEventListener('keyup', (e) => {
@@ -49,6 +54,17 @@ export class Input {
     if (!this.enabled) return;
     this.presses.push(shot);
     this.held.add(shot);
+    this.lastShot = shot;
+  }
+
+  pressDive() {
+    if (this.enabled) this.divePress = true;
+  }
+
+  takeDive() {
+    const d = this.divePress;
+    this.divePress = false;
+    return d;
   }
 
   release(shot) {
@@ -115,6 +131,20 @@ export class Input {
     zone.addEventListener('pointercancel', end);
   }
 
+  /** ダイブボタンを取り付ける */
+  attachDiveButton(el) {
+    el.addEventListener('pointerdown', (e) => {
+      e.preventDefault();
+      el.classList.add('down');
+      this.pressDive();
+    });
+    const up = () => el.classList.remove('down');
+    el.addEventListener('pointerup', up);
+    el.addEventListener('pointercancel', up);
+    el.addEventListener('pointerleave', up);
+    el.addEventListener('contextmenu', (e) => e.preventDefault());
+  }
+
   /** ショットボタンを取り付ける */
   attachButton(el, shot) {
     this.shotButtons.set(shot, el);
@@ -149,6 +179,10 @@ export class Input {
       if (!down && this.padPrev[i]) this.release(map[i]);
       this.padPrev[i] = down;
     }
+    // LB / RB で飛びつく
+    const dive = !!(pad.buttons[4]?.pressed || pad.buttons[5]?.pressed);
+    if (dive && !this.padPrev[4]) this.pressDive();
+    this.padPrev[4] = dive;
     let x = pad.axes[0] || 0;
     let y = -(pad.axes[1] || 0);
     if (pad.buttons[12]?.pressed) y = 1;
@@ -198,5 +232,6 @@ export class Input {
 
   clear() {
     this.presses.length = 0;
+    this.divePress = false;
   }
 }

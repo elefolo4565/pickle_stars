@@ -118,3 +118,11 @@ test('サーバーは飛びつきの打球をラグ補償つきで受け付け�
   assert.equal(m.hit(1, m.tick, SHOT.SOFT, 0, 0, pl.x, pl.z, true), null);
   assert.equal(m.rally.lastHitter, 1);
 });
+
+test('自分から飛びついたことがスナップショットで相手に伝わる', () => {
+  const m = new Match();
+  assert.equal(m.snapshot().pl[1][8], 0);
+  m.dive(1);
+  assert.equal(m.snapshot().pl[1][8], 1);
+  assert.equal(m.snapshot().pl[0][8], 0);
+});

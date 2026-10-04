@@ -4,7 +4,7 @@
 // - 自分の打球はローカルで即座に反映し、サーバーがラグ補償つきで検証する
 import * as THREE from 'three';
 import {
-  SHOT, DT, DT_MS, MOVE_SPEED, MOVE_ACCEL, SWING_WINDOW, KITCHEN, DIVE_RECOVER, forwardSign, sideOf,
+  SHOT, DT, DT_MS, MOVE_SPEED, MOVE_ACCEL, SWING_WINDOW, KITCHEN, DIVE_RECOVER, DIVE_WINDOW, forwardSign, sideOf,
 } from '@shared/constants.js';
 import {
   cloneRally, stepRally, hitBlockReason, applyHit, contactQuality, predictBounce, inCourt,
@@ -32,6 +32,15 @@ function diveVec(ball, px, pz) {
   const d = Math.hypot(dx, dz) || 1;
   const k = Math.min(1.2, Math.max(0, d - 0.6)) / d;
   return [dx * k, dz * k];
+}
+
+/** 自分から飛びつく向き: スティックを倒していればその方向、なければボールの方へ */
+function diveDir(idx, mv, ball, px, pz) {
+  const d = Math.hypot(mv.x, mv.y);
+  if (d > 0.3) return [(mv.x / d) * rightSign(idx) * 1.2, (mv.y / d) * forwardSign(idx) * 1.2];
+  const [wx, wz] = diveVec(ball, px, pz);
+  if (Math.hypot(wx, wz) > 0.3) return [wx, wz];
+  return [0, forwardSign(idx) * 1.2];
 }
 
 function swingKind(idx, ball, px) {
@@ -89,6 +98,7 @@ export class GameSession {
     this.sim = null; // {tick, rally}
     this.pendingHit = null;
     this.swingWin = null;
+    this.diveWin = null; // 自分から飛びついている最中 (この間にボールが届けば打つ)
     this.serveSentAt = -1e9;
     this.lastSoundTick = -1;
     this.lastCheckTick = -1;
@@ -96,6 +106,7 @@ export class GameSession {
     this.lastSend = 0;
     this.lastSwingSeq = [-1, -1];
     this.lastEmoteSeq = [-1, -1];
+    this.lastDiveSeq = [-1, -1];
     this.over = false;
     this.hintSeq = -1;
     this.landingKey = '';
@@ -166,6 +177,13 @@ export class GameSession {
       this.chars[this.opp].ready(swingKind(this.opp, s.b.p, this.remote.x));
     }
     this.lastSwingSeq[this.opp] = po[4];
+    // 相手が自分から飛びついた
+    if (this.lastDiveSeq[this.opp] >= 0 && po[8] !== this.lastDiveSeq[this.opp] && this.phase === 'rally') {
+      const ball = s.b.p || [this.remote.x, 1, this.remote.z];
+      const [wx, wz] = diveVec(ball, this.remote.x, this.remote.z);
+      this.chars[this.opp].dive(wx, wz, swingKind(this.opp, ball, this.remote.x));
+    }
+    this.lastDiveSeq[this.opp] = po[8] ?? 0;
     // エモート
     for (const i of [0, 1]) {
       const pl = s.pl[i];
@@ -231,7 +249,9 @@ export class GameSession {
           const kind = e.kind === 'serve' ? 'serve' : swingKind(this.opp, ball, this.remote.x);
           if (e.kind === 'dive') {
             const [wx, wz] = diveVec(ball, this.remote.x, this.remote.z);
-            this.chars[this.opp].dive(wx, wz, kind);
+            // 自分から飛びついたのをもう見せていれば、振るだけ
+            if (this.chars[this.opp].diving()) this.chars[this.opp].strike(kind);
+            else this.chars[this.opp].dive(wx, wz, kind);
           } else {
             this.chars[this.opp].strike(kind);
           }
@@ -268,6 +288,7 @@ export class GameSession {
         this.remote.rs = po.rs;
         this.serveSentAt = -1e9;
         this.swingWin = null;
+        this.diveWin = null;
         this.me.recoverUntil = 0;
         const ss = this.score[e.server];
         const rs = this.score[1 - e.server];
@@ -315,8 +336,45 @@ export class GameSession {
     this.chars[this.you].ready(swingKind(this.you, ball, this.me.x));
   }
 
+  /** 好きなタイミングで飛びつく。少しの間にボールが飛びつきの届く範囲に入れば打つ */
+  startDive(now) {
+    if (this.over || this.phase !== 'rally' || !this.sim || now < this.me.recoverUntil) return;
+    const me = this.me;
+    const r = this.sim.rally;
+    const [wx, wz] = diveDir(this.you, this.input.getMove(), r.p, me.x, me.z);
+    const shot = this.swingWin ? this.swingWin.shot : this.input.autoHit ? this.input.autoShot : this.input.lastShot;
+    this.diveWin = { shot, until: now + DIVE_WINDOW * 1000 };
+    this.swingWin = null;
+    me.recoverUntil = now + DIVE_RECOVER * 1000;
+    me.vx = me.vz = 0;
+    this.chars[this.you].dive(wx, wz, swingKind(this.you, r.p, me.x));
+    this.conn.send({ t: 'dv' });
+    sfx.swing();
+    this.checkDive();
+  }
+
+  /** 飛びついている最中: 届けば打つ */
+  checkDive() {
+    const dw = this.diveWin;
+    if (!dw || this.phase !== 'rally' || !this.sim) return;
+    const r = this.sim.rally;
+    const me = this.me;
+    const reason = hitBlockReason(r, this.you, me.x, me.z, true);
+    if ((reason === 'twobounce' || reason === 'kitchen') && this.hintSeq !== r.seq) {
+      this.hintSeq = r.seq;
+      this.hud.feedback(reason === 'twobounce' ? 'ツーバウンドルール! 1回バウンドさせよう' : 'キッチンではボレーできない!', 'warn');
+    }
+    if (reason) return;
+    this.diveWin = null;
+    this.doHit(dw.shot, true, false);
+  }
+
   /** 毎 tick: 構え中ならベストな打点で打つ */
   checkHit() {
+    if (this.diveWin) {
+      this.checkDive();
+      return;
+    }
     // オート打ち返し: 構えていなくても、打てる位置にボールが来たら最後に押したショットで構える
     if (!this.swingWin && this.input.autoHit && !this.over && this.phase === 'rally' && this.sim
       && performance.now() >= this.me.recoverUntil) {
@@ -352,20 +410,35 @@ export class GameSession {
       stepRally(nxt);
       if (!hitBlockReason(nxt, this.you, me.x, me.z) && contactQuality(nxt, me.x, me.z) > q + 1e-4) return;
     }
+    this.swingWin = null;
+    this.doHit(sw.shot, dive, dive);
+  }
+
+  /**
+   * 今の位置・今のボールで打つ (ローカルで反映してサーバーへ送る)
+   * @param {boolean} dive 飛びついて打つ
+   * @param {boolean} startDive 飛びつきの動きをここで始める (自分から飛びついたときは始まっている)
+   */
+  doHit(shot, dive, startDive) {
+    const r = this.sim.rally;
+    const me = this.me;
     const aim = this.input.getMove();
     const kind = swingKind(this.you, r.p, me.x);
     const [wx, wz] = diveVec(r.p, me.x, me.z);
-    const res = applyHit(r, this.you, sw.shot, aim.x, aim.y, me.x, me.z, dive);
+    const res = applyHit(r, this.you, shot, aim.x, aim.y, me.x, me.z, dive);
     this.conn.send({
-      t: 'hit', k: this.sim.tick, s: sw.shot, ax: aim.x, ay: aim.y, x: me.x, z: me.z, q: r.seq, dv: dive ? 1 : 0,
+      t: 'hit', k: this.sim.tick, s: shot, ax: aim.x, ay: aim.y, x: me.x, z: me.z, q: r.seq, dv: dive ? 1 : 0,
     });
     this.pendingHit = { seq: r.seq, until: performance.now() + 700 };
-    this.swingWin = null;
     sfx.hit(res.kind, res.quality);
     if (dive) {
-      this.chars[this.you].dive(wx, wz, kind);
-      me.recoverUntil = performance.now() + DIVE_RECOVER * 1000;
-      me.vx = me.vz = 0;
+      if (startDive) {
+        this.chars[this.you].dive(wx, wz, kind);
+        me.recoverUntil = performance.now() + DIVE_RECOVER * 1000;
+        me.vx = me.vz = 0;
+      } else {
+        this.chars[this.you].strike(kind);
+      }
       this.hud.feedback('ダイビング!', 'good');
       return;
     }
@@ -398,6 +471,8 @@ export class GameSession {
 
     let press;
     while ((press = input.takePress())) this.onPress(press);
+    if (input.takeDive()) this.startDive(now);
+    if (this.diveWin && now > this.diveWin.until) this.diveWin = null;
     const emo = input.takeEmote();
     if (emo >= 0) this.sendEmote(emo);
 

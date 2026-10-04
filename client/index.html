@@ -122,12 +122,14 @@
             <tr><td class="c-red">強打</td><td>J / スペース</td><td>赤ボタン</td></tr>
             <tr><td class="c-blue">ソフト</td><td>K</td><td>青ボタン</td></tr>
             <tr><td class="c-yellow">ロブ</td><td>L</td><td>黄ボタン</td></tr>
+            <tr><td class="c-green">ダイブ</td><td>Shift / I</td><td>緑ボタン</td></tr>
             <tr><td>エモート</td><td>1〜8</td><td>右上の顔ボタン</td></tr>
           </table>
           <ul>
             <li>ボタンを押すと<b>構え</b>、ボールが届く範囲に来たら<b>一番いい打点で自動で打ちます</b>。押しっぱなしで構えを続けられます。</li>
             <li>打つ瞬間の移動方向で<b>狙い</b>が変わります（左右＝コース、前＝深く、後ろ＝浅く）。相手の打球が来ている間は、相手コートに出る<b>青い輪</b>が今の狙いの着地点です。サイドラインぎりぎりを狙うほどアウトのリスクも上がります。</li>
             <li>届かないボールも、構えていれば<b>飛びついて</b>返せます（少し遠くまで届く）。ただし当たりは悪くなり、起き上がるまで少し動けません。</li>
+            <li><b>ダイブ</b>ボタンで、好きなタイミングで飛びつけます（移動している方向へ。止まっていればボールの方へ）。飛びついた直後にボールが届けば、最後に選んだショットで打ち返します。空振りすると起き上がるまで動けないので注意！</li>
             <li>ボールの横（体から少し離れた位置）で打つと<b>ナイスショット</b>。近すぎ・遠すぎ・低すぎると打球が乱れます。</li>
             <li>高いボールを強打すると<b>スマッシュ</b>！ ソフトはネット際に落とすドロップ/ディンク、ロブは相手の頭上を越える高い球です。</li>
             <li>黄色い輪は、相手の打球の<b>着地予想地点</b>です。</li>
@@ -184,8 +186,9 @@
         <button class="shot soft" id="shot-soft">ソフト</button>
         <button class="shot lob" id="shot-lob">ロブ</button>
         <button class="shot drive" id="shot-drive">強打</button>
+        <button class="shot dive" id="shot-dive">ダイブ</button>
       </div>
-      <div class="kb-help only-desktop">移動 WASD　<b class="c-red">J</b> 強打　<b class="c-blue">K</b> ソフト　<b class="c-yellow">L</b> ロブ　(長押しで構え続ける)</div>
+      <div class="kb-help only-desktop">移動 WASD　<b class="c-red">J</b> 強打　<b class="c-blue">K</b> ソフト　<b class="c-yellow">L</b> ロブ　<b>Shift</b> ダイブ　(長押しで構え続ける)</div>
     </section>
 
     <div id="toast" class="toast hidden"></div>
