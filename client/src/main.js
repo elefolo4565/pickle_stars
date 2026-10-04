@@ -124,6 +124,21 @@ $('btn-join').addEventListener('click', () => {
 });
 $('btn-cpu').addEventListener('click', () => modal.open('pnl-cpu'));
 
+// CPU の対戦相手ボタン (おまかせ + 全キャラ)。前回選んだ相手を覚えておく
+{
+  const seg = $('seg-cpuchar');
+  const saved = Number(load('ps_cpuchar', '-1'));
+  CHARACTERS.forEach((def, i) => {
+    const b = document.createElement('button');
+    b.dataset.v = String(i);
+    b.textContent = def.name;
+    seg.appendChild(b);
+  });
+  if (saved >= 0 && saved < CHARACTERS.length) {
+    seg.querySelectorAll('button').forEach((b) => b.classList.toggle('on', b.dataset.v === String(saved)));
+  }
+}
+
 // ---------- オンライン ----------
 async function ensureNet() {
   if (state.net && state.net.ws && state.net.ws.readyState === WebSocket.OPEN) return state.net;
@@ -224,8 +239,13 @@ $('btn-share').addEventListener('click', async () => {
 $('btn-cpu-go').addEventListener('click', () => {
   const level = Number(segValue('level'));
   const pointsToWin = Number(segValue('cpupoints'));
-  let cpuChar = Math.floor(Math.random() * (CHARACTERS.length - 1));
-  if (cpuChar >= state.charIdx) cpuChar++;
+  let cpuChar = Number(segValue('cpuchar') ?? -1);
+  save('ps_cpuchar', String(cpuChar));
+  if (!(cpuChar >= 0 && cpuChar < CHARACTERS.length)) {
+    // おまかせ: 自分以外からランダム
+    cpuChar = Math.floor(Math.random() * (CHARACTERS.length - 1));
+    if (cpuChar >= state.charIdx) cpuChar++;
+  }
   const conn = new LocalConnection({
     name: playerName(),
     char: state.charIdx,
