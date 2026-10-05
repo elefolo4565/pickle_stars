@@ -3,15 +3,18 @@ import {
   DT, MOVE_SPEED, KITCHEN, COURT_HALF_L, SHOT, DIVE_RECOVER, forwardSign, sideOf,
 } from './constants.js';
 import { cloneRally, stepRally, hitBlockReason, inReach } from './rally.js';
-import { rightSign } from './shot.js';
+import { rightSign, shotKind } from './shot.js';
+import { SPECIAL, SP_MAX } from './special.js';
 import { clampPlayer } from './match.js';
 
 // 強さの設定。speed: 移動速度の倍率 / reaction: 反応までの tick 数 / aimNoise: 狙いのブレ
 // posNoise: 立ち位置のブレ / whiff: 空振りの確率 / netRush: ネットに詰める確率 / dive: 飛びつくか
+// special: ゲージ満タンのとき必殺ショットを打つ確率 / lowDrive: 低い球でも強打してしまう割合
+// drive: 強打を選ぶ割合の倍率 (弱い CPU は速い球をあまり打たない)
 const LEVELS = [
-  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25, dive: false },
-  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5, dive: true },
-  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8, dive: true },
+  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25, dive: false, special: 0.35, lowDrive: 1, drive: 0.45 },
+  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5, dive: true, special: 0.55, lowDrive: 0.5, drive: 0.8 },
+  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8, dive: true, special: 0.75, lowDrive: 0.15, drive: 1 },
 ];
 
 function rand(a, b) {
@@ -178,12 +181,15 @@ export class Bot {
     const opp = m.players[1 - this.idx];
     const myDepth = Math.abs(pl.z);
     const oppDepth = Math.abs(opp.z);
+    // 低い球の強打は浮いてしまうので、強い CPU ほど避ける
+    const d = this.cfg.drive * (shotKind(SHOT.DRIVE, r.p) === 'pop' ? this.cfg.lowDrive : 1);
     let shot;
     if (r.p[1] > 1.5) shot = SHOT.DRIVE;
-    else if (r.hitCount === 2 && myDepth > 4.5) shot = pick({ [SHOT.SOFT]: 5, [SHOT.DRIVE]: 4, [SHOT.LOB]: 1 });
-    else if (myDepth < 3.6 && oppDepth < 3.6) shot = pick({ [SHOT.SOFT]: 6, [SHOT.DRIVE]: 3, [SHOT.LOB]: 1 });
-    else if (oppDepth < 3.6) shot = pick({ [SHOT.LOB]: 2, [SHOT.SOFT]: 4, [SHOT.DRIVE]: 4 });
-    else shot = pick({ [SHOT.DRIVE]: 6, [SHOT.SOFT]: 2, [SHOT.LOB]: 1.5 });
+    else if (r.hitCount === 2 && myDepth > 4.5) shot = pick({ [SHOT.SOFT]: 5, [SHOT.DRIVE]: 4 * d, [SHOT.LOB]: 1 });
+    else if (myDepth < 3.6 && oppDepth < 3.6) shot = pick({ [SHOT.SOFT]: 6, [SHOT.DRIVE]: 3 * d, [SHOT.LOB]: 1 });
+    else if (oppDepth < 3.6) shot = pick({ [SHOT.LOB]: 2, [SHOT.SOFT]: 4, [SHOT.DRIVE]: 4 * d });
+    else shot = pick({ [SHOT.DRIVE]: 6 * d, [SHOT.SOFT]: 2, [SHOT.LOB]: 1.5 });
+    if (pl.sp >= SP_MAX && Math.random() < this.cfg.special) shot = SPECIAL;
 
     // 相手のいない側を狙う (自分視点の左右に変換)
     const oppViewX = opp.x * rightSign(this.idx);

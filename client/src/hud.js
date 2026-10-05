@@ -89,6 +89,20 @@ export class Hud {
     $('sb-rule').textContent = `${opts.pointsToWin}点${opts.scoring === 'sideout' ? '・SO' : ''}`;
   }
 
+  /** 必殺ゲージ (0..1) */
+  setGauge(me, opp) {
+    const key = `${me}|${opp}`;
+    if (key === this.lastGauge) return;
+    this.lastGauge = key;
+    $('sb-me-sp').style.width = `${me * 100}%`;
+    $('sb-opp-sp').style.width = `${opp * 100}%`;
+    $('sb-me-sp').parentElement.classList.toggle('ready', me >= 1);
+    $('sb-opp-sp').parentElement.classList.toggle('ready', opp >= 1);
+    const b = $('shot-sp');
+    b.style.setProperty('--sp', String(Math.round(me * 100)));
+    b.classList.toggle('ready', me >= 1);
+  }
+
   /** @param {boolean|null} serveMe null ならサーブ表示なし */
   setScore(me, opp, serveMe) {
     const key = `${me}|${opp}|${serveMe}`;
