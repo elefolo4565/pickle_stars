@@ -8,7 +8,6 @@ import { Hud, Modal, initSegs, segValue, toast } from './hud.js';
 import { unlockAudio, sfx, setSound, soundOn } from './audio.js';
 import { music } from './music.js';
 import { SHOT } from '@shared/constants.js';
-import { SPECIAL, specialOf } from '@shared/special.js';
 import { CHAR_STATS } from '@shared/stats.js';
 
 const $ = (id) => document.getElementById(id);
@@ -69,7 +68,6 @@ function showMenuChar() {
   $('char-name').textContent = def.name;
   $('char-title').textContent = def.title;
   $('char-desc').textContent = def.desc;
-  $('char-sp').textContent = `必殺: ${specialOf(state.charIdx).name}`;
   const cs = CHAR_STATS[state.charIdx];
   $('char-stats').textContent = cs.weak ? `得意: ${cs.good} / 苦手: ${cs.weak}` : `得意: ${cs.good}`;
   save('ps_char', String(state.charIdx));
@@ -403,7 +401,6 @@ input.attachButton($('shot-drive'), SHOT.DRIVE);
 input.attachButton($('shot-soft'), SHOT.SOFT);
 input.attachButton($('shot-lob'), SHOT.LOB);
 input.attachDiveButton($('shot-dive'));
-input.attachButton($('shot-sp'), SPECIAL, false);
 
 // ---------- メインループ ----------
 let last = performance.now();

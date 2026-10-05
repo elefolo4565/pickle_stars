@@ -49,7 +49,6 @@
             <div class="char-title" id="char-title"></div>
             <div class="char-name" id="char-name"></div>
             <div class="char-desc" id="char-desc"></div>
-            <div class="char-sp" id="char-sp"></div>
             <div class="char-stats" id="char-stats"></div>
           </div>
           <button class="arrow" id="char-next" aria-label="次のキャラ">▶</button>
@@ -130,7 +129,6 @@
             <tr><td class="c-blue">ソフト</td><td>K</td><td>青ボタン</td></tr>
             <tr><td class="c-yellow">ロブ</td><td>L</td><td>黄ボタン</td></tr>
             <tr><td class="c-green">ダイブ</td><td>Shift / I</td><td>緑ボタン</td></tr>
-            <tr><td class="c-purple">必殺ショット</td><td>U</td><td>紫ボタン</td></tr>
             <tr><td>エモート</td><td>1〜8</td><td>右上の顔ボタン</td></tr>
           </table>
           <ul>
@@ -141,7 +139,6 @@
             <li>ボールの横（体から少し離れた位置）で打つと<b>ナイスショット</b>。近すぎ・遠すぎ・低すぎると打球が乱れます。</li>
             <li>高いボールを強打すると<b>スマッシュ</b>！ ソフトはネット際に落とすドロップ/ディンク、ロブは相手の頭上を越える高い球です。</li>
             <li><b>強打の弱点</b>：ネットの近くで低い球（ひざより下）を強打すると、ふわっと浮いて相手のスマッシュのチャンスになります。ネット際の低い球はソフトで返しましょう。</li>
-            <li><b>必殺ショット</b>：打つたびにスコアの下のゲージがたまります（ソフト・ロブほど多くたまる）。満タンになると紫の<b>必殺</b>ボタンが光り、キャラごとの必殺ショットを1回打てます。必殺ショットは体勢に関係なく完璧に当たります。</li>
             <li>黄色い輪は、相手の打球の<b>着地予想地点</b>です。</li>
           </ul>
           <h3>ルール（ピックルボール）</h3>
@@ -184,13 +181,11 @@
       <div class="score-board">
         <div class="sb-side me">
           <div class="sb-name" id="sb-me-name">あなた</div>
-          <div class="sp-bar"><i id="sb-me-sp"></i></div>
           <div class="sb-score"><span class="serve-dot" id="sb-me-serve">●</span><span id="sb-me">0</span></div>
         </div>
         <div class="sb-mid" id="sb-rule">11点</div>
         <div class="sb-side opp">
           <div class="sb-name" id="sb-opp-name">あいて</div>
-          <div class="sp-bar"><i id="sb-opp-sp"></i></div>
           <div class="sb-score"><span id="sb-opp">0</span><span class="serve-dot" id="sb-opp-serve">●</span></div>
         </div>
       </div>
@@ -209,9 +204,8 @@
         <button class="shot lob" id="shot-lob">ロブ</button>
         <button class="shot drive" id="shot-drive">強打</button>
         <button class="shot dive" id="shot-dive">ダイブ</button>
-        <button class="shot sp" id="shot-sp"><span>必殺</span></button>
       </div>
-      <div class="kb-help only-desktop">移動 WASD　<b class="c-red">J</b> 強打　<b class="c-blue">K</b> ソフト　<b class="c-yellow">L</b> ロブ　<b>Shift</b> ダイブ　<b class="c-purple">U</b> 必殺　(長押しで構え続ける)</div>
+      <div class="kb-help only-desktop">移動 WASD　<b class="c-red">J</b> 強打　<b class="c-blue">K</b> ソフト　<b class="c-yellow">L</b> ロブ　<b>Shift</b> ダイブ　(長押しで構え続ける)</div>
     </section>
 
     <div id="toast" class="toast hidden"></div>
