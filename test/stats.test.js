@@ -5,7 +5,6 @@ import { Bot } from '../shared/ai.js';
 import { createRally, stepRally, hitBlockReason, applyServe, applyHit } from '../shared/rally.js';
 import { SHOT, REACH } from '../shared/constants.js';
 import { CHAR_STATS, BASE_STATS, statsOf } from '../shared/stats.js';
-import { SPECIALS } from '../shared/special.js';
 
 const PICO = 0;
 const MOMO = 1;
@@ -14,8 +13,8 @@ const LUNA = 3;
 const BOLT = 4;
 const COCO = 5;
 
-test('能力の表は必殺ショットと同じキャラ数で、知らない番号は標準になる', () => {
-  assert.equal(CHAR_STATS.length, SPECIALS.length);
+test('能力の表は 7 キャラ分あり、知らない番号は標準になる', () => {
+  assert.equal(CHAR_STATS.length, 7);
   assert.deepEqual({ ...statsOf(99) }, { ...statsOf(PICO) });
   for (const { stats } of CHAR_STATS) {
     assert.deepEqual(Object.keys(stats).sort(), Object.keys(BASE_STATS).sort());

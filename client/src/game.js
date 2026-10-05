@@ -12,9 +12,6 @@ import {
 import { clampPlayer } from '@shared/match.js';
 import { rightSign, aimPoint } from '@shared/shot.js';
 import { statsOf } from '@shared/stats.js';
-import {
-  SPECIAL, SP_MAX, specialOf, isSpecialKind, spGain,
-} from '@shared/special.js';
 import { Chibi } from './characters.js';
 import { makeBlob, makeRing } from './scene.js';
 import { sfx } from './audio.js';
@@ -119,13 +116,10 @@ export class GameSession {
     this.tmpV = new THREE.Vector3();
     this.events = [];
     this.time = 0;
-    this.sp = [0, 0]; // 必殺ゲージ
-    this.mySpecial = specialOf(this.players[this.you].char);
     this.myStats = statsOf(this.players[this.you].char);
 
     hud.setPlayers(this.players[this.you], this.players[this.opp], this.opts);
     hud.setScore(0, 0, null);
-    hud.setGauge(0, 0);
   }
 
   estTick() {
@@ -192,10 +186,6 @@ export class GameSession {
       this.chars[this.opp].dive(wx, wz, swingKind(this.opp, ball, this.remote.x));
     }
     this.lastDiveSeq[this.opp] = po[8] ?? 0;
-    // 必殺ゲージ (自分の打球を送った直後は、ローカルで反映した値を優先する)
-    if (!this.pendingHit) this.sp[this.you] = pm[9] ?? 0;
-    this.sp[this.opp] = po[9] ?? 0;
-    this.hud.setGauge(this.sp[this.you] / SP_MAX, this.sp[this.opp] / SP_MAX);
     // エモート
     for (const i of [0, 1]) {
       const pl = s.pl[i];
@@ -268,9 +258,6 @@ export class GameSession {
             this.chars[this.opp].strike(kind);
           }
           sfx.hit(e.kind, e.q);
-          if (isSpecialKind(e.kind)) {
-            hud.feedback(`相手の${specialOf(this.players[this.opp].char).name}!`, 'special');
-          }
         } else if (e.kind === 'serve') {
           sfx.hit('serve', 1);
         }
@@ -342,10 +329,6 @@ export class GameSession {
       return;
     }
     if (this.phase !== 'rally') return;
-    if (shot === SPECIAL && this.sp[this.you] < SP_MAX) {
-      this.hud.feedback('ゲージがまだたまっていない', 'warn');
-      return;
-    }
     this.startSwing(shot, now);
   }
 
@@ -446,17 +429,12 @@ export class GameSession {
     const aim = this.input.getMove();
     const kind = swingKind(this.you, r.p, me.x);
     const [wx, wz] = diveVec(r.p, me.x, me.z);
-    // 必殺ショットはキャラの種類に置き換えて打つ (サーバーも同じ置き換えをする)
-    const special = shot === SPECIAL;
-    const res = applyHit(r, this.you, special ? this.mySpecial.kind : shot, aim.x, aim.y, me.x, me.z, dive, this.myStats);
-    this.sp[this.you] = special ? 0 : Math.min(SP_MAX, this.sp[this.you] + spGain(res.kind));
-    this.hud.setGauge(this.sp[this.you] / SP_MAX, this.sp[this.opp] / SP_MAX);
+    const res = applyHit(r, this.you, shot, aim.x, aim.y, me.x, me.z, dive, this.myStats);
     this.conn.send({
       t: 'hit', k: this.sim.tick, s: shot, ax: aim.x, ay: aim.y, x: me.x, z: me.z, q: r.seq, dv: dive ? 1 : 0,
     });
     this.pendingHit = { seq: r.seq, until: performance.now() + 700 };
     sfx.hit(res.kind, res.quality);
-    if (special) this.hud.feedback(`${this.mySpecial.name}!`, 'special');
     if (dive) {
       if (startDive) {
         this.chars[this.you].dive(wx, wz, kind);
@@ -465,11 +443,10 @@ export class GameSession {
       } else {
         this.chars[this.you].strike(kind);
       }
-      if (!special) this.hud.feedback('ダイビング!', 'good');
+      this.hud.feedback('ダイビング!', 'good');
       return;
     }
     this.chars[this.you].strike(kind);
-    if (special) return;
     if (res.kind === 'smash') this.hud.feedback('スマッシュ!', 'good');
     else if (res.kind === 'pop') this.hud.feedback('低い球の強打は浮いちゃう…', 'warn');
     else if (res.quality >= 0.97) this.hud.feedback('ナイスショット!', 'good');
@@ -652,8 +629,7 @@ export class GameSession {
       && (sideOf(r.p[2]) === this.you || r.bounces === 0);
     if (incoming && !this.over) {
       const mv = this.input.getMove();
-      let shot = this.swingWin ? this.swingWin.shot : this.input.autoHit ? this.input.autoShot : SHOT.DRIVE;
-      if (shot === SPECIAL) shot = this.mySpecial.kind;
+      const shot = this.swingWin ? this.swingWin.shot : this.input.autoHit ? this.input.autoShot : SHOT.DRIVE;
       const [ax, az] = aimPoint(this.you, shot, mv.x, mv.y, r.p);
       mark.position.set(ax, 0.014, az);
       mark.material.opacity = this.swingWin ? 0.95 : 0.5;

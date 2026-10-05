@@ -6,7 +6,6 @@ import {
   createRally, stepRally, hitBlockReason, applyServe, applyHit, inServiceCourt, inCourt,
 } from '../shared/rally.js';
 import { SHOT, REACH, REACH_MAX_Y, KITCHEN, DIVE_REACH, DIVE_QUALITY } from '../shared/constants.js';
-import { SPECIAL, SPECIAL_KINDS, SP_MAX, specialOf } from '../shared/special.js';
 
 function playBots(levels, opts, maxTicks = 60 * 60 * 30) {
   const m = new Match(opts);
@@ -186,42 +185,4 @@ test('ネット近くで低い球を強打すると浮いて、相手のスマ�
     assert.ok(res.overKitchen > 1.5, `キッチンの相手の打点が高い ${p}: ${res.overKitchen.toFixed(2)}`);
     assert.ok(res.t > 1.1 * 60, `遅い ${p}: ${res.t}`);
   }
-});
-
-test('必殺ショットはそれぞれ持ち味があり、相手コートに入る', () => {
-  for (const p of [[0, 0.6, 6.5], [1, 0.3, 2.3], [-1, 1.0, 4]]) {
-    const drive = flight(p, SHOT.DRIVE);
-    const soft = flight(p, SHOT.SOFT);
-    const meteor = flight(p, SPECIAL_KINDS.meteor);
-    const drop = flight(p, SPECIAL_KINDS.drop);
-    const curve = flight(p, SPECIAL_KINDS.curve, 1);
-    const star = flight(p, SPECIAL_KINDS.star);
-    assert.ok(meteor.t < drive.t || drive.kind === 'pop', `メテオは強打より速い ${p}: ${meteor.t} vs ${drive.t}`);
-    assert.ok(meteor.t <= 0.7 * 60, `メテオは速い ${p}: ${meteor.t}`);
-    assert.ok(Math.abs(drop.z) < Math.abs(soft.z) && drop.bounceTop < soft.bounceTop, `ドロップはソフトより手前で弾まない ${p}`);
-    assert.ok(Math.abs(curve.x) > 2.4, `カーブはサイドラインぎりぎりに入る ${p}: ${curve.x.toFixed(2)}`);
-    assert.ok(star.overKitchen > REACH_MAX_Y + 1 && star.t < 1.6 * 60, `スターは高く速く落ちる ${p}`);
-    assert.ok(Math.abs(star.z) > 5.8, `スターはコートの奥に落ちる ${p}: ${star.z.toFixed(2)}`);
-  }
-});
-
-test('必殺ゲージ: たまるまで打てず、満タンでキャラの必殺ショットになり、打つと空になる', () => {
-  const m = new Match({ chars: [6, 2] });
-  for (let i = 0; i < 40; i++) m.step();
-  assert.ok(m.serve(0, SHOT.DRIVE, 0, 0));
-  const pl = m.players[1];
-  const ready = () => {
-    // サーブが返球側コートでバウンドして上がってきたところ
-    for (let i = 0; i < 300 && !(m.rally.bounces === 1 && m.rally.v[1] < 0 && m.rally.p[1] < 0.9); i++) m.step();
-    pl.x = m.rally.p[0] - 0.6;
-    pl.z = m.rally.p[2] - 0.4;
-  };
-  ready();
-  assert.equal(m.hit(1, m.tick, SPECIAL, 0, 0, pl.x, pl.z), 'gauge');
-  pl.sp = SP_MAX;
-  assert.equal(m.hit(1, m.tick, SPECIAL, 0, 0, pl.x, pl.z), null);
-  assert.equal(m.rally.kind, specialOf(2).kind);
-  assert.equal(pl.sp, 0);
-  const ev = m.events.find((e) => e.type === 'hit' && e.by === 1);
-  assert.equal(ev.kind, SPECIAL_KINDS.meteor);
 });

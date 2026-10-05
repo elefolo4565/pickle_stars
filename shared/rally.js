@@ -7,7 +7,6 @@ import {
   forwardSign, sideOf, netHeightAt,
 } from './constants.js';
 import { computeShot, computeServe, servePosition, rightSign } from './shot.js';
-import { isSpecialKind } from './special.js';
 import { BASE_STATS } from './stats.js';
 
 /**
@@ -27,7 +26,6 @@ import { BASE_STATS } from './stats.js';
  * @property {string} kind 直近の打球の種類 ('serve' / SHOT.* / 'smash')
  * @property {number} gm 重力の倍率 (強打のトップスピンで大きくなる)
  * @property {number} rest バウンドの反発係数 (ソフトは弾まない)
- * @property {number} cx 横方向の加速度 (カーブ。バウンドで消える)
  */
 
 /** @returns {Rally} */
@@ -48,7 +46,6 @@ export function createRally(server = 0, serveRight = true) {
     kind: 'serve',
     gm: 1,
     rest: BOUNCE_RESTITUTION,
-    cx: 0,
   };
 }
 
@@ -70,7 +67,6 @@ export function cloneRally(r) {
     kind: r.kind,
     gm: r.gm,
     rest: r.rest,
-    cx: r.cx,
   };
 }
 
@@ -126,8 +122,7 @@ export function stepRally(r, events = null) {
   const pz = p[2];
   const g = GRAVITY * r.gm;
 
-  p[0] += v[0] * DT + 0.5 * r.cx * DT * DT;
-  v[0] += r.cx * DT;
+  p[0] += v[0] * DT;
   p[1] += v[1] * DT - 0.5 * g * DT * DT;
   p[2] += v[2] * DT;
   v[1] -= g * DT;
@@ -154,7 +149,6 @@ export function stepRally(r, events = null) {
     p[1] = BALL_R;
     if (v[1] < -0.9) {
       v[1] = -v[1] * r.rest;
-      r.cx = 0;
       v[0] *= BOUNCE_FRICTION;
       v[2] *= BOUNCE_FRICTION;
       onBounce(r, p[0], p[2], events);
@@ -226,22 +220,19 @@ export function hitBlockReason(r, idx, px, pz, dive = false, st = BASE_STATS) {
 /** 打球を適用する。呼ぶ前に hitBlockReason で検証しておくこと。 */
 export function applyHit(r, idx, shot, aimX, aimY, px, pz, dive = false, st = BASE_STATS) {
   // 飛びついた打球は当たりが一定で悪い (体勢が崩れている)
-  // 必殺ショットは体勢に関係なく完璧に当たる
-  const special = isSpecialKind(shot);
-  const quality = special ? 1 : dive ? DIVE_QUALITY : contactQuality(r, px, pz, st);
+  const quality = dive ? DIVE_QUALITY : contactQuality(r, px, pz, st);
   const res = computeShot(r.p, idx, shot, aimX, aimY, quality, st);
   r.v = res.v;
   r.kind = res.kind;
   r.gm = res.gm;
   r.rest = res.rest;
-  r.cx = res.cx;
   r.hitCount++;
   r.lastHitter = idx;
   r.bounces = 0;
   r.netTouched = false;
   r.rolling = false;
   r.seq++;
-  return { kind: dive && !special ? 'dive' : res.kind, quality };
+  return { kind: dive ? 'dive' : res.kind, quality };
 }
 
 /** サーブ準備状態にする */
@@ -259,7 +250,6 @@ export function resetForServe(r, server, serveRight) {
   r.kind = 'serve';
   r.gm = 1;
   r.rest = BOUNCE_RESTITUTION;
-  r.cx = 0;
 }
 
 export function applyServe(r, shot, aimX, aimY, px, pz) {
@@ -270,7 +260,6 @@ export function applyServe(r, shot, aimX, aimY, px, pz) {
   r.kind = 'serve';
   r.gm = 1;
   r.rest = BOUNCE_RESTITUTION;
-  r.cx = 0;
   r.active = true;
   r.hitCount = 1;
   r.lastHitter = idx;

@@ -82,7 +82,7 @@ export const sfx = {
   /** パドルの「ポコッ」 */
   hit(kind = 'drive', quality = 1) {
     if (!ready()) return;
-    const smash = kind === 'smash' || kind.startsWith('sp_');
+    const smash = kind === 'smash';
     const soft = kind === 'soft';
     const base = smash ? 700 : soft ? 1250 : 1000;
     tone(base, base * 0.45, 0.07, 'triangle', smash ? 0.9 : soft ? 0.35 : 0.6);

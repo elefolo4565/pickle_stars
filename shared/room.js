@@ -3,11 +3,8 @@
 import { DT_MS, SNAPSHOT_EVERY, SHOT } from './constants.js';
 import { Match } from './match.js';
 import { Bot } from './ai.js';
-import { SPECIAL } from './special.js';
 
 const SHOTS = new Set(Object.values(SHOT));
-// 構え・打球では必殺ショットも選べる (サーブは通常のショットだけ)
-const HIT_SHOTS = new Set([...SHOTS, SPECIAL]);
 
 /**
  * @typedef {Object} Member
@@ -113,13 +110,13 @@ export class Room {
         m.setPlayerInput(idx, +msg.x, +msg.z, +msg.ry, msg.rs | 0);
         break;
       case 'sw':
-        if (HIT_SHOTS.has(msg.s)) m.swing(idx, msg.s);
+        if (SHOTS.has(msg.s)) m.swing(idx, msg.s);
         break;
       case 'dv':
         m.dive(idx);
         break;
       case 'hit': {
-        if (!HIT_SHOTS.has(msg.s)) return;
+        if (!SHOTS.has(msg.s)) return;
         const err = m.hit(idx, +msg.k, msg.s, +msg.ax, +msg.ay, +msg.x, +msg.z, !!msg.dv);
         if (err) this.members[idx]?.send({ t: 'hitNo', q: msg.q, reason: err });
         else this.broadcast(m.snapshot());
