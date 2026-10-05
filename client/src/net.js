@@ -122,7 +122,10 @@ export class LocalConnection {
     this.online = false;
     this.handler = () => {};
     this.queue = [];
-    this.room = new Room({ code: 'CPU', opts, now: () => performance.now() });
+    // 一時停止できる時計。止めている間の時間を差し引くので、再開しても試合が飛ばない
+    this.pausedAt = -1;
+    this.pausedTotal = 0;
+    this.room = new Room({ code: 'CPU', opts, now: () => this.serverNow() });
     this.room.addMember({
       send: (m) => this.queue.push(structuredClone(m)),
       name,
@@ -153,7 +156,21 @@ export class LocalConnection {
   }
 
   serverNow() {
-    return performance.now();
+    const t = this.pausedAt >= 0 ? this.pausedAt : performance.now();
+    return t - this.pausedTotal;
+  }
+
+  /** CPU 戦だけ一時停止できる */
+  setPaused(paused) {
+    if (paused && this.pausedAt < 0) this.pausedAt = performance.now();
+    if (!paused && this.pausedAt >= 0) {
+      this.pausedTotal += performance.now() - this.pausedAt;
+      this.pausedAt = -1;
+    }
+  }
+
+  get paused() {
+    return this.pausedAt >= 0;
   }
 
   rtt() {
@@ -161,6 +178,7 @@ export class LocalConnection {
   }
 
   update() {
+    if (this.paused) return;
     this.room.update();
     this.deliver();
   }
