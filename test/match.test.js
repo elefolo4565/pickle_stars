@@ -5,7 +5,7 @@ import { Bot } from '../shared/ai.js';
 import {
   createRally, stepRally, hitBlockReason, applyServe, applyHit, inServiceCourt,
 } from '../shared/rally.js';
-import { SHOT, REACH, DIVE_REACH, DIVE_QUALITY } from '../shared/constants.js';
+import { SHOT, REACH, REACH_MAX_Y, KITCHEN, DIVE_REACH, DIVE_QUALITY } from '../shared/constants.js';
 
 function playBots(levels, opts, maxTicks = 60 * 60 * 30) {
   const m = new Match(opts);
@@ -125,4 +125,39 @@ test('自分から飛びついたことがスナップショットで相手に�
   m.dive(1);
   assert.equal(m.snapshot().pl[1][8], 1);
   assert.equal(m.snapshot().pl[0][8], 0);
+});
+
+test('ショットごとに性格がはっきり違う (強打は速い・ソフトは弾まない・ロブはネット際の相手を越える)', () => {
+  for (const p of [[0, 0.6, 6.5], [0, 0.6, 2.3], [0, 0.3, 2.3]]) {
+    const res = {};
+    for (const shot of Object.values(SHOT)) {
+      const r = createRally(1, true);
+      r.active = true;
+      r.p = [...p];
+      r.hitCount = 3;
+      r.lastHitter = 1;
+      r.bounces = 1;
+      applyHit(r, 0, shot, 0, 0, p[0] + 0.7, p[2]);
+      const ev = [];
+      let t = 0;
+      let overKitchen = null;
+      let bounceTop = 0;
+      while (t < 400 && ev.length < 2) {
+        const pz = r.p[2];
+        stepRally(r, ev);
+        t++;
+        if (pz > -KITCHEN && r.p[2] <= -KITCHEN) overKitchen = r.p[1];
+        if (ev.length === 1) bounceTop = Math.max(bounceTop, r.p[1]);
+        if (ev.length === 1 && !res[shot]) res[shot] = { t };
+      }
+      assert.equal(ev[0].type, 'bounce');
+      Object.assign(res[shot], { overKitchen, bounceTop });
+    }
+    const at = p.join(',');
+    assert.ok(res.drive.t < 0.85 * 60, `強打は速い ${at}: ${res.drive.t}`);
+    assert.ok(res.soft.t > res.drive.t * 1.35, `ソフトは強打より遅い ${at}`);
+    assert.ok(res.soft.bounceTop < 0.45, `ソフトは低く弾む ${at}: ${res.soft.bounceTop.toFixed(2)}`);
+    assert.ok(res.lob.overKitchen > REACH_MAX_Y, `ロブはキッチンの相手の頭を越える ${at}: ${res.lob.overKitchen.toFixed(2)}`);
+    assert.ok(res.lob.bounceTop < 1.5, `ロブは弾んでもスマッシュされる高さにならない ${at}: ${res.lob.bounceTop.toFixed(2)}`);
+  }
 });
