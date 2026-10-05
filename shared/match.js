@@ -8,6 +8,7 @@ import {
   createRally, cloneRally, stepRally, hitBlockReason, applyHit, applyServe, resetForServe,
 } from './rally.js';
 import { rightSign } from './shot.js';
+import { SPECIAL, SP_MAX, specialOf, spGain } from './special.js';
 
 /** プレイヤー idx のベースライン上の z */
 export function baselineZ(idx) {
@@ -49,6 +50,7 @@ function makePlayer(idx) {
     emote: 0,
     emoteSeq: 0,
     diveSeq: 0, // 自分から飛びついた回数 (相手の画面で飛びつきを見せるため)
+    sp: 0, // 必殺ゲージ (0..SP_MAX)
     moveBudget: MOVE_BUDGET_MAX, // クライアント申告の移動量の上限 (ワープ対策)
   };
 }
@@ -58,10 +60,12 @@ const MOVE_BUDGET_RATE = MOVE_SPEED * 1.25;
 
 export class Match {
   /**
-   * @param {{pointsToWin?: number, scoring?: 'rally'|'sideout'}} opts
+   * @param {{pointsToWin?: number, scoring?: 'rally'|'sideout', chars?: number[]}} opts
+   *   chars: 各プレイヤーのキャラ番号 (必殺ショットの種類が決まる)
    */
   constructor(opts = {}) {
     this.pointsToWin = opts.pointsToWin ?? 11;
+    this.chars = opts.chars ?? [0, 0];
     this.scoring = opts.scoring === 'sideout' ? 'sideout' : 'rally';
     this.tick = 0;
     this.players = [makePlayer(0), makePlayer(1)];
@@ -170,6 +174,12 @@ export class Match {
     if (this.phase !== 'rally') return 'phase';
     if (![atTick, aimX, aimY, px, pz].every(Number.isFinite)) return 'bad';
     const pl = this.players[idx];
+    // 必殺ショットはゲージが満タンのときだけ。キャラごとの種類に置き換える
+    const special = shot === SPECIAL;
+    if (special) {
+      if (pl.sp < SP_MAX) return 'gauge';
+      shot = specialOf(this.chars[idx]).kind;
+    }
     // クライアントが申告した位置がサーバーの把握している位置と大きくずれていたら拒否
     if (Math.hypot(px - pl.x, pz - pl.z) > 1.6) return 'pos';
     const c = clampPlayer(idx, px, pz, this.phase, this.rally);
@@ -204,7 +214,8 @@ export class Match {
       }
     }
     this.rally = r;
-    this.swing(idx, shot);
+    this.swing(idx, special ? SPECIAL : shot);
+    pl.sp = special ? 0 : Math.min(SP_MAX, pl.sp + spGain(res.kind));
     this.events.push({ type: 'hit', by: idx, kind: res.kind, q: res.quality, tick: base.tick });
     return null;
   }
@@ -289,7 +300,7 @@ export class Match {
       sc: this.score,
       b: this.rally,
       pl: this.players.map((p) => [
-        p.x, p.z, p.ry, p.rs, p.swingSeq, p.swingShot, p.emote, p.emoteSeq, p.diveSeq,
+        p.x, p.z, p.ry, p.rs, p.swingSeq, p.swingShot, p.emote, p.emoteSeq, p.diveSeq, p.sp,
       ]),
     };
   }

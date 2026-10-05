@@ -1,11 +1,13 @@
 // 入力: キーボード / タッチ (バーチャルスティック + ショットボタン) / ゲームパッド
 import { SHOT } from '@shared/constants.js';
+import { SPECIAL } from '@shared/special.js';
 
 const KEY_SHOT = {
   Space: SHOT.DRIVE,
   KeyJ: SHOT.DRIVE,
   KeyK: SHOT.SOFT,
   KeyL: SHOT.LOB,
+  KeyU: SPECIAL,
 };
 // 好きなタイミングで飛びつく
 const KEY_DIVE = new Set(['ShiftLeft', 'ShiftRight', 'KeyI']);
@@ -54,7 +56,8 @@ export class Input {
     if (!this.enabled) return;
     this.presses.push(shot);
     this.held.add(shot);
-    this.lastShot = shot;
+    // 必殺ショットは 1 回きりなので、飛びつき・オート打ち返し用には覚えない
+    if (shot !== SPECIAL) this.lastShot = shot;
   }
 
   pressDive() {
@@ -145,15 +148,18 @@ export class Input {
     el.addEventListener('contextmenu', (e) => e.preventDefault());
   }
 
-  /** ショットボタンを取り付ける */
-  attachButton(el, shot) {
-    this.shotButtons.set(shot, el);
+  /**
+   * ショットボタンを取り付ける
+   * @param {boolean} [auto] オート打ち返しのショットとして選べるか
+   */
+  attachButton(el, shot, auto = true) {
+    if (auto) this.shotButtons.set(shot, el);
     this.markAutoShot();
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       el.setPointerCapture?.(e.pointerId);
       el.classList.add('down');
-      if (this.enabled) {
+      if (this.enabled && auto) {
         this.autoShot = shot;
         this.markAutoShot();
       }
@@ -172,7 +178,7 @@ export class Input {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     const pad = pads && [...pads].find((p) => p && p.connected);
     if (!pad) return null;
-    const map = [SHOT.DRIVE, SHOT.SOFT, SHOT.LOB, SHOT.LOB];
+    const map = [SHOT.DRIVE, SHOT.SOFT, SHOT.LOB, SPECIAL];
     for (let i = 0; i < 4; i++) {
       const down = !!pad.buttons[i]?.pressed;
       if (down && !this.padPrev[i]) this.press(map[i]);

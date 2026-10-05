@@ -14,6 +14,11 @@ const TRAIL_STYLE = {
   smash: { color: 0xff2a2a, w: 1.8 },
   soft: { color: 0x5fb4ff, w: 0.9 },
   lob: { color: 0xffcf2e, w: 1.1 },
+  pop: { color: 0xff9aa4, w: 1 },
+  sp_meteor: { color: 0xff8a1e, w: 2.4 },
+  sp_drop: { color: 0xff8be0, w: 1.8 },
+  sp_curve: { color: 0x6cffc8, w: 2 },
+  sp_star: { color: 0xc58cff, w: 2.2 },
 };
 export const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
