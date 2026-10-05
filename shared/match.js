@@ -9,6 +9,7 @@ import {
 } from './rally.js';
 import { rightSign } from './shot.js';
 import { SPECIAL, SP_MAX, specialOf, spGain } from './special.js';
+import { statsOf } from './stats.js';
 
 /** プレイヤー idx のベースライン上の z */
 export function baselineZ(idx) {
@@ -56,16 +57,17 @@ function makePlayer(idx) {
 }
 
 const MOVE_BUDGET_MAX = 1.5;
-const MOVE_BUDGET_RATE = MOVE_SPEED * 1.25;
+const MOVE_BUDGET_RATE = MOVE_SPEED * 1.25; // 足の速さの能力でさらに倍率がかかる
 
 export class Match {
   /**
    * @param {{pointsToWin?: number, scoring?: 'rally'|'sideout', chars?: number[]}} opts
-   *   chars: 各プレイヤーのキャラ番号 (必殺ショットの種類が決まる)
+   *   chars: 各プレイヤーのキャラ番号 (必殺ショットの種類と能力が決まる)
    */
   constructor(opts = {}) {
     this.pointsToWin = opts.pointsToWin ?? 11;
     this.chars = opts.chars ?? [0, 0];
+    this.stats = this.chars.map(statsOf);
     this.scoring = opts.scoring === 'sideout' ? 'sideout' : 'rally';
     this.tick = 0;
     this.players = [makePlayer(0), makePlayer(1)];
@@ -196,10 +198,11 @@ export class Match {
     }
     if (!base) return 'history';
     const r = cloneRally(base.rally);
-    const reason = hitBlockReason(r, idx, px, pz, dive);
+    const st = this.stats[idx];
+    const reason = hitBlockReason(r, idx, px, pz, dive, st);
     if (reason) return reason;
 
-    const res = applyHit(r, idx, shot, aimX, aimY, px, pz, dive);
+    const res = applyHit(r, idx, shot, aimX, aimY, px, pz, dive, st);
     // 履歴を巻き戻して再シミュレーション
     while (this.history.length && this.history[this.history.length - 1].tick >= base.tick) {
       this.history.pop();
@@ -223,9 +226,10 @@ export class Match {
   step() {
     this.tick++;
     this.phaseTime += DT;
-    for (const pl of this.players) {
-      pl.moveBudget = Math.min(MOVE_BUDGET_MAX, pl.moveBudget + MOVE_BUDGET_RATE * DT);
-    }
+    this.players.forEach((pl, i) => {
+      const rate = MOVE_BUDGET_RATE * this.stats[i].speed;
+      pl.moveBudget = Math.min(MOVE_BUDGET_MAX, pl.moveBudget + rate * DT);
+    });
     switch (this.phase) {
       case 'serve':
         if (this.phaseTime > SERVE_TIMEOUT_SEC) {

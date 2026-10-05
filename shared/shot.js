@@ -5,6 +5,7 @@ import {
   forwardSign, netHeightAt,
 } from './constants.js';
 import { SPECIAL_KINDS } from './special.js';
+import { BASE_STATS } from './stats.js';
 
 /** プレイヤーから見た「右」がワールド x のどちら向きか */
 export function rightSign(playerIdx) {
@@ -39,6 +40,9 @@ export function solveTrajectory(p, tx, tz, tau, clearance, g = GRAVITY, cx = 0) 
   }
   return v;
 }
+
+/** ぶれやすさに touch (ふんわり球の正確さ) を使う打球 */
+const TOUCH_KINDS = new Set([SHOT.SOFT, SHOT.LOB, SPECIAL_KINDS.drop, SPECIAL_KINDS.star]);
 
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
@@ -109,9 +113,10 @@ export function aimPoint(idx, shot, aimX, aimY, ball = [0, 1, 5]) {
  * @param {number} aimX プレイヤー視点の左右 (-1..1)
  * @param {number} aimY プレイヤー視点の奥行き (-1..1, +1 で深く)
  * @param {number} quality 当たりの良さ (0..1)
+ * @param {import('./stats.js').Stats} [st] 打ったキャラの能力
  * @returns {{v: number[], kind: string, gm: number, rest: number, cx: number}}
  */
-export function computeShot(p, idx, shot, aimX, aimY, quality) {
+export function computeShot(p, idx, shot, aimX, aimY, quality, st = BASE_STATS) {
   const f = forwardSign(idx);
   const ax = clamp(aimX, -1, 1) * rightSign(idx);
   const ay = clamp(aimY, -1, 1);
@@ -121,7 +126,8 @@ export function computeShot(p, idx, shot, aimX, aimY, quality) {
 
   let tx = ax * 2.6;
   // 当たりが悪いほど、狙った方向へ大きくぶれる (サイドラインを狙うほどリスクが高い)
-  const err = 1 - quality;
+  // ぶれやすさはキャラの能力で変わる (ふんわり系は touch、それ以外は control)
+  const err = (1 - quality) * (TOUCH_KINDS.has(kind) ? st.touch : st.control);
   const side = ax !== 0 ? Math.sign(ax) : (p[0] >= 0 ? 1 : -1);
   tx += side * err * (0.4 + Math.abs(ax) * 2.2);
   if (kind === SHOT.SOFT) depth -= err * 0.9;
@@ -145,7 +151,7 @@ export function computeShot(p, idx, shot, aimX, aimY, quality) {
   else if (kind === SPECIAL_KINDS.drop) tau = 0.4 + hd * 0.055;
   else if (kind === SHOT.LOB) tau = 1.25 + hd * 0.02;
   else if (kind === SPECIAL_KINDS.star) tau = 0.95 + hd * 0.02;
-  else tau = hd / sp.speed;
+  else tau = hd / (kind === 'pop' ? sp.speed : sp.speed * st.power);
   tau /= BALL_SPEED;
 
   const v = solveTrajectory(p, tx, tz, tau, clearance, GRAVITY * sp.gm, cx);
