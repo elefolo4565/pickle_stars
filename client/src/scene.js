@@ -359,7 +359,7 @@ export class GameScene {
     this.ballShadow.material.opacity = sh;
     const st = TRAIL_STYLE[kind] || TRAIL_STYLE.serve;
     this.trail.material.color.setHex(st.color);
-    this.trailW = VIS_R * 1.1 * st.w;
+    this.trailW = this.ballVisR * 1.1 * st.w;
     this.updateTrail(x, vy, z, speed > 1);
   }
 
