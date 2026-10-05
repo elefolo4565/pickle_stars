@@ -8,6 +8,7 @@ import {
 } from './constants.js';
 import { computeShot, computeServe, servePosition, rightSign } from './shot.js';
 import { isSpecialKind } from './special.js';
+import { BASE_STATS } from './stats.js';
 
 /**
  * @typedef {Object} Rally
@@ -180,9 +181,10 @@ export function stepRally(r, events = null) {
 
 /**
  * 当たりの良さ (0.3..1)。体から近すぎる・遠すぎる・低すぎるボールは悪くなる。
+ * 距離はキャラの届く範囲 (st.reach) に合わせて伸び縮みする。
  */
-export function contactQuality(r, px, pz) {
-  const d = Math.hypot(r.p[0] - px, r.p[2] - pz);
+export function contactQuality(r, px, pz, st = BASE_STATS) {
+  const d = Math.hypot(r.p[0] - px, r.p[2] - pz) / st.reach;
   const y = r.p[1];
   let qd = 1;
   if (d < 0.4) qd = 0.6 + (d / 0.4) * 0.4;
@@ -193,10 +195,10 @@ export function contactQuality(r, px, pz) {
 }
 
 /** ボールがリーチ内にあるか (dive なら飛びついて届く範囲) */
-export function inReach(r, idx, px, pz, dive = false) {
+export function inReach(r, idx, px, pz, dive = false, st = BASE_STATS) {
   const dx = r.p[0] - px;
   const dz = r.p[2] - pz;
-  const reach = dive ? DIVE_REACH : REACH;
+  const reach = dive ? DIVE_REACH * st.dive : REACH * st.reach;
   if (dx * dx + dz * dz > reach * reach) return false;
   if (r.p[1] < REACH_MIN_Y || r.p[1] > REACH_MAX_Y) return false;
   // 背中側に大きく回ったボールは打てない
@@ -207,26 +209,27 @@ export function inReach(r, idx, px, pz, dive = false) {
 /**
  * 打てるかどうか。打てるなら null、打てない理由があればその文字列。
  * @param {boolean} [dive] 飛びついて打つ (リーチが広がる)
+ * @param {import('./stats.js').Stats} [st] 打つキャラの能力
  * @returns {string|null}
  */
-export function hitBlockReason(r, idx, px, pz, dive = false) {
+export function hitBlockReason(r, idx, px, pz, dive = false, st = BASE_STATS) {
   if (!r.active || r.fault) return 'inactive';
   if (r.lastHitter === idx) return 'twice';
   if (sideOf(r.p[2]) !== idx) return 'side';
   if (r.bounces >= 2) return 'dead';
-  if (!inReach(r, idx, px, pz, dive)) return 'reach';
+  if (!inReach(r, idx, px, pz, dive, st)) return 'reach';
   if (r.bounces === 0 && r.hitCount <= 2) return 'twobounce';
   if (r.bounces === 0 && Math.abs(pz) < KITCHEN) return 'kitchen';
   return null;
 }
 
 /** 打球を適用する。呼ぶ前に hitBlockReason で検証しておくこと。 */
-export function applyHit(r, idx, shot, aimX, aimY, px, pz, dive = false) {
+export function applyHit(r, idx, shot, aimX, aimY, px, pz, dive = false, st = BASE_STATS) {
   // 飛びついた打球は当たりが一定で悪い (体勢が崩れている)
   // 必殺ショットは体勢に関係なく完璧に当たる
   const special = isSpecialKind(shot);
-  const quality = special ? 1 : dive ? DIVE_QUALITY : contactQuality(r, px, pz);
-  const res = computeShot(r.p, idx, shot, aimX, aimY, quality);
+  const quality = special ? 1 : dive ? DIVE_QUALITY : contactQuality(r, px, pz, st);
+  const res = computeShot(r.p, idx, shot, aimX, aimY, quality, st);
   r.v = res.v;
   r.kind = res.kind;
   r.gm = res.gm;

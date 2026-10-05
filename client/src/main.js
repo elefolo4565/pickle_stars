@@ -9,6 +9,7 @@ import { unlockAudio, sfx, setSound, soundOn } from './audio.js';
 import { music } from './music.js';
 import { SHOT } from '@shared/constants.js';
 import { SPECIAL, specialOf } from '@shared/special.js';
+import { CHAR_STATS } from '@shared/stats.js';
 
 const $ = (id) => document.getElementById(id);
 if (IS_TOUCH) document.body.classList.add('real-touch');
@@ -69,6 +70,8 @@ function showMenuChar() {
   $('char-title').textContent = def.title;
   $('char-desc').textContent = def.desc;
   $('char-sp').textContent = `必殺: ${specialOf(state.charIdx).name}`;
+  const cs = CHAR_STATS[state.charIdx];
+  $('char-stats').textContent = cs.weak ? `得意: ${cs.good} / 苦手: ${cs.weak}` : `得意: ${cs.good}`;
   save('ps_char', String(state.charIdx));
 }
 

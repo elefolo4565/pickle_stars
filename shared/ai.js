@@ -85,14 +85,15 @@ export class Bot {
         tz = this.plan.z;
       }
       // 打てるなら打つ
-      if (!this.whiff && hitBlockReason(r, this.idx, pl.x, pl.z) === null) {
-        const due = !this.plan || m.tick >= this.plan.tick - 1 || !this.willStayInReach(r, pl);
+      const st = m.stats[this.idx];
+      if (!this.whiff && hitBlockReason(r, this.idx, pl.x, pl.z, false, st) === null) {
+        const due = !this.plan || m.tick >= this.plan.tick - 1 || !this.willStayInReach(r, pl, false, st);
         if (due) this.doHit(m, pl);
-      } else if (!this.whiff && this.cfg.dive && hitBlockReason(r, this.idx, pl.x, pl.z, true) === null
-        && !this.willStayInReach(r, pl, true)) {
+      } else if (!this.whiff && this.cfg.dive && hitBlockReason(r, this.idx, pl.x, pl.z, true, st) === null
+        && !this.willStayInReach(r, pl, true, st)) {
         // 間に合わない: 届く範囲から出ていく直前に飛びつく
         this.doHit(m, pl, true);
-        this.recoverUntil = m.tick + Math.round(DIVE_RECOVER / DT);
+        this.recoverUntil = m.tick + Math.round((DIVE_RECOVER * st.recover) / DT);
         return;
       }
     } else if (m.phase === 'rally') {
@@ -116,18 +117,18 @@ export class Bot {
     this.moveToward(m, pl, tx, tz);
   }
 
-  willStayInReach(r, pl, dive = false) {
+  willStayInReach(r, pl, dive, st) {
     const s = cloneRally(r);
     stepRally(s);
     stepRally(s);
-    return inReach(s, this.idx, pl.x, pl.z, dive) && s.bounces < 2;
+    return inReach(s, this.idx, pl.x, pl.z, dive, st) && s.bounces < 2;
   }
 
   moveToward(m, pl, tx, tz) {
     const dx = tx - pl.x;
     const dz = tz - pl.z;
     const d = Math.hypot(dx, dz);
-    const step = MOVE_SPEED * this.cfg.speed * DT;
+    const step = MOVE_SPEED * this.cfg.speed * m.stats[this.idx].speed * DT;
     let nx = tx;
     let nz = tz;
     if (d > step) {
@@ -144,7 +145,8 @@ export class Bot {
   makePlan(m) {
     const r = cloneRally(m.rally);
     const pl = m.players[this.idx];
-    const speed = MOVE_SPEED * this.cfg.speed;
+    const st = m.stats[this.idx];
+    const speed = MOVE_SPEED * this.cfg.speed * st.speed;
     const f = forwardSign(this.idx);
     const reactT = this.cfg.reaction * DT;
     let best = null;
@@ -160,8 +162,8 @@ export class Bot {
       const y = r.p[1];
       if (y < 0.2 || y > 2.2) continue;
       // ボールを利き手側 (右) に置く位置に立つ
-      const sx = r.p[0] - rightSign(this.idx) * side;
-      const sz = r.p[2] - f * back;
+      const sx = r.p[0] - rightSign(this.idx) * side * st.reach;
+      const sz = r.p[2] - f * back * st.reach;
       if (r.bounces === 0 && Math.abs(sz) < KITCHEN + 0.05) continue;
       const need = Math.hypot(sx - pl.x, sz - pl.z) / speed + reactT;
       const late = need - t * DT;
