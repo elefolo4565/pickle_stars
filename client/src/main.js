@@ -334,10 +334,40 @@ function backToMenu(sendLeave) {
   music.play('menu');
 }
 
-$('btn-exit').addEventListener('click', () => {
-  const msg = state.conn && state.conn.online ? '試合をやめてメニューに戻りますか？（相手の勝ちになります）' : '試合をやめてメニューに戻りますか？';
-  if (state.session && !state.session.over && !confirm(msg)) return;
-  backToMenu(true);
+// 試合をやめる確認 (CPU 戦は開いている間だけ一時停止。オンラインは止められない)
+function openQuit() {
+  if (!state.session || state.session.over) {
+    backToMenu(true);
+    return;
+  }
+  const online = !!(state.conn && state.conn.online);
+  $('quit-msg').innerHTML = online
+    ? 'メニューにもどると、相手の勝ちになります。<span class="quit-note">※ 試合はこのまま続いています</span>'
+    : 'メニューにもどりますか？<span class="quit-note">試合は一時停止しています</span>';
+  input.clear();
+  state.conn?.setPaused?.(true);
+  $('emote-menu').classList.add('hidden');
+  modal.open('pnl-quit');
+  sfx.click();
+}
+
+function closeQuit() {
+  if (!modal.isOpen('pnl-quit')) return;
+  modal.close();
+  input.clear();
+  state.conn?.setPaused?.(false);
+}
+
+$('btn-exit').addEventListener('click', openQuit);
+$('btn-quit-no').addEventListener('click', () => {
+  sfx.click();
+  closeQuit();
+});
+$('btn-quit-yes').addEventListener('click', () => backToMenu(true));
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape' || state.mode !== 'game' || e.repeat) return;
+  if (modal.isOpen('pnl-quit')) closeQuit();
+  else if (!modal.current) openQuit();
 });
 
 // エモート
@@ -379,8 +409,10 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (state.mode === 'game' && state.session) {
-    state.conn?.update();
-    state.session?.update(dt);
+    if (!state.conn?.paused) {
+      state.conn?.update();
+      state.session?.update(dt);
+    }
   } else {
     menuTime += dt;
     if (state.menuChar) {

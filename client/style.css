@@ -59,6 +59,7 @@ html, body {
 .btn.yellow { background: var(--yellow); }
 .btn.blue { background: var(--blue); }
 .btn.gray { background: #8090b0; }
+.btn.red { background: var(--red); }
 .btn.big { font-size: 24px; padding: 14px 22px; }
 .btn.small { font-size: 14px; padding: 7px 12px; }
 .btn:disabled { filter: grayscale(0.8); opacity: 0.7; }
@@ -203,6 +204,12 @@ html, body {
 .result-title.win { color: var(--yellow); }
 .result-title.lose { color: #c6d4ff; }
 .result-score { font-size: 32px; }
+/* 試合をやめる確認 */
+.panel.quit { width: min(380px, 100%); }
+.quit-ball { width: 46px; height: 46px; display: block; margin: 2px auto 6px; animation: quit-spin 2.4s linear infinite; }
+@keyframes quit-spin { to { transform: rotate(360deg); } }
+.quit-note { display: block; font-size: 12px; color: var(--yellow); margin-top: 4px; }
+.panel.quit .row .btn { min-width: 120px; }
 .result-status { font-size: 13px; min-height: 20px; margin-top: 6px; color: #dfe9ff; }
 
 /* ---------- HUD ---------- */
