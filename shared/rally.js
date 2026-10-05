@@ -22,6 +22,9 @@ import { computeShot, computeServe, servePosition, rightSign } from './shot.js';
  * @property {boolean} serveRight
  * @property {{loser: number, reason: string}|null} fault
  * @property {number} seq サーブ・打球ごとに増える通し番号
+ * @property {string} kind 直近の打球の種類 ('serve' / SHOT.* / 'smash')
+ * @property {number} gm 重力の倍率 (強打のトップスピンで大きくなる)
+ * @property {number} rest バウンドの反発係数 (ソフトは弾まない)
  */
 
 /** @returns {Rally} */
@@ -39,6 +42,9 @@ export function createRally(server = 0, serveRight = true) {
     serveRight,
     fault: null,
     seq: 0,
+    kind: 'serve',
+    gm: 1,
+    rest: BOUNCE_RESTITUTION,
   };
 }
 
@@ -57,6 +63,9 @@ export function cloneRally(r) {
     serveRight: r.serveRight,
     fault: r.fault ? { loser: r.fault.loser, reason: r.fault.reason } : null,
     seq: r.seq,
+    kind: r.kind,
+    gm: r.gm,
+    rest: r.rest,
   };
 }
 
@@ -110,17 +119,18 @@ export function stepRally(r, events = null) {
   const p = r.p;
   const v = r.v;
   const pz = p[2];
+  const g = GRAVITY * r.gm;
 
   p[0] += v[0] * DT;
-  p[1] += v[1] * DT - 0.5 * GRAVITY * DT * DT;
+  p[1] += v[1] * DT - 0.5 * g * DT * DT;
   p[2] += v[2] * DT;
-  v[1] -= GRAVITY * DT;
+  v[1] -= g * DT;
 
   // ネット判定
   if (pz !== 0 && (pz > 0) !== (p[2] > 0)) {
     const f = pz / (pz - p[2]);
     const xc = p[0] - v[0] * DT * (1 - f);
-    const yc = p[1] - (v[1] + 0.5 * GRAVITY * DT) * DT * (1 - f);
+    const yc = p[1] - (v[1] + 0.5 * g * DT) * DT * (1 - f);
     if (Math.abs(xc) <= NET_HALF_W && yc < netHeightAt(xc) + BALL_R && yc > -0.1) {
       p[0] = xc;
       p[1] = Math.max(yc, BALL_R);
@@ -137,7 +147,7 @@ export function stepRally(r, events = null) {
   if (p[1] < BALL_R) {
     p[1] = BALL_R;
     if (v[1] < -0.9) {
-      v[1] = -v[1] * BOUNCE_RESTITUTION;
+      v[1] = -v[1] * r.rest;
       v[0] *= BOUNCE_FRICTION;
       v[2] *= BOUNCE_FRICTION;
       onBounce(r, p[0], p[2], events);
@@ -210,6 +220,9 @@ export function applyHit(r, idx, shot, aimX, aimY, px, pz, dive = false) {
   const quality = dive ? DIVE_QUALITY : contactQuality(r, px, pz);
   const res = computeShot(r.p, idx, shot, aimX, aimY, quality);
   r.v = res.v;
+  r.kind = res.kind;
+  r.gm = res.gm;
+  r.rest = res.rest;
   r.hitCount++;
   r.lastHitter = idx;
   r.bounces = 0;
@@ -231,6 +244,9 @@ export function resetForServe(r, server, serveRight) {
   r.server = server;
   r.serveRight = serveRight;
   r.v = [0, 0, 0];
+  r.kind = 'serve';
+  r.gm = 1;
+  r.rest = BOUNCE_RESTITUTION;
 }
 
 export function applyServe(r, shot, aimX, aimY, px, pz) {
@@ -238,6 +254,9 @@ export function applyServe(r, shot, aimX, aimY, px, pz) {
   r.p = servePosition(idx, px, pz);
   const res = computeServe(r.p, idx, r.serveRight, shot, aimX, aimY);
   r.v = res.v;
+  r.kind = 'serve';
+  r.gm = 1;
+  r.rest = BOUNCE_RESTITUTION;
   r.active = true;
   r.hitCount = 1;
   r.lastHitter = idx;
