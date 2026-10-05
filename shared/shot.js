@@ -1,7 +1,7 @@
 // 打球の軌道計算。サーバーとクライアントで同じ結果になるよう、
 // 乱数や三角関数を使わない決定的な計算だけで構成している。
 import {
-  BALL_R, GRAVITY, BALL_SPEED, COURT_HALF_W, COURT_HALF_L, KITCHEN, SHOT,
+  BALL_R, GRAVITY, BALL_SPEED, BOUNCE_RESTITUTION, COURT_HALF_W, COURT_HALF_L, KITCHEN, SHOT,
   forwardSign, netHeightAt,
 } from './constants.js';
 
@@ -17,22 +17,23 @@ export function rightSign(playerIdx) {
  * @param {number} tz
  * @param {number} tau 初期の滞空時間
  * @param {number} clearance ネット上の余裕
+ * @param {number} [g] 重力 (スピンで変わる)
  * @returns {number[]}
  */
-export function solveTrajectory(p, tx, tz, tau, clearance) {
+export function solveTrajectory(p, tx, tz, tau, clearance, g = GRAVITY) {
   let v = [0, 0, 0];
   for (let i = 0; i < 80; i++) {
     const vx = (tx - p[0]) / tau;
     const vz = (tz - p[2]) / tau;
-    const vy = (BALL_R - p[1] + 0.5 * GRAVITY * tau * tau) / tau;
+    const vy = (BALL_R - p[1] + 0.5 * g * tau * tau) / tau;
     v = [vx, vy, vz];
     const crosses = (p[2] > 0) !== (tz > 0) && vz !== 0;
     if (!crosses) return v;
     const tn = -p[2] / vz;
     const xn = p[0] + vx * tn;
-    const yn = p[1] + vy * tn - 0.5 * GRAVITY * tn * tn;
+    const yn = p[1] + vy * tn - 0.5 * g * tn * tn;
     if (yn >= netHeightAt(xn) + BALL_R + clearance) return v;
-    tau += 0.03;
+    tau += 0.02;
   }
   return v;
 }
@@ -42,7 +43,9 @@ function clamp(v, lo, hi) {
 }
 
 /**
- * 打球の種類ごとの狙う深さ・速さ・ネット上の余裕 (当たりが完璧なとき)。
+ * 打球の種類ごとの性格 (当たりが完璧なとき)。
+ * depth: 狙う深さ / speed: 横方向の速さ (0 なら tau の式で決める) / clearance: ネット上の余裕
+ * gm: 重力の倍率 (強打はトップスピンで沈む) / rest: バウンドの弾み (ソフトは弾まない)
  * @param {string} kind SHOT.* または 'smash'
  * @param {number} ay -1..1
  * @param {number} y 打点の高さ
@@ -50,13 +53,13 @@ function clamp(v, lo, hi) {
 function shotParams(kind, ay, y) {
   switch (kind) {
     case 'smash':
-      return { depth: 4.2 + ay * 1.6, speed: 21, clearance: 0.05 };
+      return { depth: 4.2 + ay * 1.6, speed: 28, clearance: 0.05, gm: 1, rest: BOUNCE_RESTITUTION };
     case SHOT.SOFT:
-      return { depth: 1.25 + ay * 0.6, speed: 0, clearance: 0.22 };
+      return { depth: 1.25 + ay * 0.6, speed: 0, clearance: 0.2, gm: 1, rest: 0.42 };
     case SHOT.LOB:
-      return { depth: 5.5 + ay * 0.7, speed: 0, clearance: 0.9 };
+      return { depth: 5.9 + ay * 0.5, speed: 0, clearance: 0.9, gm: 1.4, rest: 0.56 };
     default:
-      return { depth: 5.2 + ay * 1.0, speed: y < 0.45 ? 11.5 : 14.5, clearance: 0.12 };
+      return { depth: 5.2 + ay * 1.0, speed: y < 0.45 ? 16 : 20, clearance: 0.16, gm: 1.9, rest: 0.55 };
   }
 }
 
@@ -87,7 +90,8 @@ export function computeShot(p, idx, shot, aimX, aimY, quality) {
   let kind = shot;
   if (shot === SHOT.DRIVE && p[1] > 1.5) kind = 'smash';
 
-  let { depth, speed, clearance } = shotParams(kind, ay, p[1]);
+  const sp = shotParams(kind, ay, p[1]);
+  let { depth, clearance } = sp;
 
   let tx = ax * 2.6;
   // 当たりが悪いほど、狙った方向へ大きくぶれる (サイドラインを狙うほどリスクが高い)
@@ -98,17 +102,18 @@ export function computeShot(p, idx, shot, aimX, aimY, quality) {
   else depth += err * (0.7 + Math.max(ay, 0) * 1.3);
   depth = Math.max(depth, 0.25);
   // 当たりが悪いとネットの上の余裕がなくなり、ネットにかかることがある
-  clearance -= err * 0.55;
+  clearance -= err * 0.45;
   const tz = f * depth;
 
   const hd = Math.sqrt((tx - p[0]) ** 2 + (tz - p[2]) ** 2);
   let tau;
-  if (kind === SHOT.SOFT) tau = 0.6 + hd * 0.075;
-  else if (kind === SHOT.LOB) tau = 1.35 + hd * 0.045;
-  else tau = hd / speed;
+  if (kind === SHOT.SOFT) tau = 0.45 + hd * 0.06;
+  else if (kind === SHOT.LOB) tau = 1.25 + hd * 0.02;
+  else tau = hd / sp.speed;
   tau /= BALL_SPEED;
 
-  return { v: solveTrajectory(p, tx, tz, tau, clearance), kind };
+  const v = solveTrajectory(p, tx, tz, tau, clearance, GRAVITY * sp.gm);
+  return { v, kind, gm: sp.gm, rest: sp.rest };
 }
 
 /** サーブ時のボールの初期位置 */

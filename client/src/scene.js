@@ -7,6 +7,14 @@ import { toonMat, toonMesh, GEO } from './toon.js';
 
 export const MENU_CHAR_Z = 5.4;
 const TRAIL_N = 26; // 軌跡の長さ (フレーム数)
+// ショットの種類ごとの軌跡の色と太さ (色はショットボタンに合わせる)
+const TRAIL_STYLE = {
+  serve: { color: 0xffffa0, w: 1 },
+  drive: { color: 0xff4d5e, w: 1.3 },
+  smash: { color: 0xff2a2a, w: 1.8 },
+  soft: { color: 0x5fb4ff, w: 0.9 },
+  lob: { color: 0xffcf2e, w: 1.1 },
+};
 export const IS_TOUCH = matchMedia('(pointer: coarse)').matches || 'ontouchstart' in window;
 
 const COLORS = {
@@ -305,7 +313,7 @@ export class GameScene {
     const col = new Float32Array(N * 2 * 4);
     for (let i = 0; i < N; i++) {
       const a = Math.pow(1 - i / (N - 1), 1.4) * 0.75;
-      for (let k = 0; k < 2; k++) col.set([1, 1, 0.55, a], (i * 2 + k) * 4);
+      for (let k = 0; k < 2; k++) col.set([1, 1, 1, a], (i * 2 + k) * 4);
     }
     const idx = [];
     for (let i = 0; i < N - 1; i++) {
@@ -329,8 +337,11 @@ export class GameScene {
     this.tC = new THREE.Vector3();
   }
 
-  /** ボールの描画位置を更新 */
-  setBall(x, y, z, visible, speed) {
+  /**
+   * ボールの描画位置を更新
+   * @param {string} [kind] 直近の打球の種類 (軌跡の色が変わる)
+   */
+  setBall(x, y, z, visible, speed, kind = 'serve') {
     this.ball.visible = visible;
     this.ballShadow.visible = visible;
     if (!visible) {
@@ -346,6 +357,9 @@ export class GameScene {
     this.ballShadow.position.set(x, 0.008, z);
     this.ballShadow.scale.setScalar(sh);
     this.ballShadow.material.opacity = sh;
+    const st = TRAIL_STYLE[kind] || TRAIL_STYLE.serve;
+    this.trail.material.color.setHex(st.color);
+    this.trailW = this.ballVisR * 1.1 * st.w;
     this.updateTrail(x, vy, z, speed > 1);
   }
 

@@ -603,7 +603,7 @@ export class GameSession {
       this.visOff.multiplyScalar(Math.exp(-dt * 12));
       this.ballDisp.add(this.visOff);
       const speed = Math.hypot(r.v[0], r.v[1], r.v[2]);
-      sc.setBall(this.ballDisp.x, Math.max(this.ballDisp.y, 0.037), this.ballDisp.z, true, speed);
+      sc.setBall(this.ballDisp.x, Math.max(this.ballDisp.y, 0.037), this.ballDisp.z, true, speed, r.kind);
     } else {
       sc.setBall(0, 0, 0, false, 0);
     }
