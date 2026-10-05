@@ -18,6 +18,7 @@ const SKIN = 0xffd2b0;
  * @property {(ctx: BuildCtx) => void} deco
  * @property {(p: {body: THREE.Group, arms: THREE.Group[], legs: THREE.Group[]}) => void} [dress] 胴体・手足の飾り
  * @property {string} [model] glb モデルのパス。読み込めたらプリミティブの体と差し替える
+ * @property {boolean} [calmMenu] キャラ選択画面でバンザイや素振りをせず、立ったままにする
  */
 
 /** @type {CharDef[]} */
@@ -148,6 +149,7 @@ export const CHARACTERS = [
     desc: 'リボンとフリルの魔法少女。きらきらの瞳でボールを見逃さない。',
     color: 0xe8609a,
     model: 'models/choruko.glb',
+    calmMenu: true,
     c: {
       skin: SKIN, shirt: 0xf27aaa, pants: 0xe8609a, shoe: 0xd02a7a, paddle: 0xd02a7a, hand: SKIN,
       arm: SKIN, leg: SKIN, skirt: { r: 0.4, h: 0.34 },
@@ -377,6 +379,13 @@ function getEmojiTexture(i) {
 }
 export { EMOJIS };
 
+/** glb モデルを先に読み込んでおく (キャラを表示するまでの待ち時間を減らす) */
+export function preloadModels() {
+  for (const def of CHARACTERS) {
+    if (def.model) loadModel(def.model).catch(() => {});
+  }
+}
+
 const _v1 = new THREE.Vector3();
 const _v2 = new THREE.Vector3();
 
@@ -496,9 +505,14 @@ export class Chibi {
 
     this.glb = null;
     if (def.model) {
+      // 読み込み中は何も見せない (仮の体が一瞬見えないように)。失敗したら仮の体を出す
+      this.model.visible = false;
       loadModel(def.model)
         .then((gltf) => this.useGlb(gltf))
-        .catch((e) => console.warn('model load failed', def.model, e));
+        .catch((e) => console.warn('model load failed', def.model, e))
+        .finally(() => {
+          this.model.visible = true;
+        });
     }
   }
 
