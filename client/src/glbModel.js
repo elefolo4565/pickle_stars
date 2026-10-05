@@ -6,7 +6,7 @@ import { outlineMat } from './toon.js';
 
 // テクスチャに陰影が描き込まれているので、影は他のキャラより薄くする
 const softGradient = (() => {
-  const tex = new THREE.DataTexture(new Uint8Array([190, 225, 255]), 3, 1, THREE.RedFormat);
+  const tex = new THREE.DataTexture(new Uint8Array([225, 245, 255]), 3, 1, THREE.RedFormat);
   tex.minFilter = THREE.NearestFilter;
   tex.magFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
