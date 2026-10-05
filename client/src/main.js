@@ -11,7 +11,7 @@ import { SHOT } from '@shared/constants.js';
 import { SPECIAL, specialOf } from '@shared/special.js';
 
 const $ = (id) => document.getElementById(id);
-if (IS_TOUCH) document.body.classList.add('touch');
+if (IS_TOUCH) document.body.classList.add('real-touch');
 
 function load(key, def) {
   try {
@@ -353,8 +353,18 @@ EMOJIS.forEach((e, i) => {
 });
 $('btn-emote').addEventListener('click', () => emoteMenu.classList.toggle('hidden'));
 
-// タッチ操作 (スマホではオート打ち返しを使う)
-input.setAutoHit(IS_TOUCH);
+// タッチ操作 (スマホではオート打ち返しを使う)。PC でも「ボタン操作」を ON にすると同じ画面ボタンで遊べる
+function setTouchUi(on) {
+  document.body.classList.toggle('touch', on);
+  input.setAutoHit(on);
+  $('btn-touchui').textContent = `ボタン操作: ${on ? 'ON' : 'OFF'}`;
+}
+setTouchUi(IS_TOUCH || load('ps_touchui', '0') === '1');
+$('btn-touchui').addEventListener('click', () => {
+  const on = !document.body.classList.contains('touch');
+  save('ps_touchui', on ? '1' : '0');
+  setTouchUi(on);
+});
 input.attachJoystick($('touch-zone'), $('joy-base'), $('joy-knob'));
 input.attachButton($('shot-drive'), SHOT.DRIVE);
 input.attachButton($('shot-soft'), SHOT.SOFT);

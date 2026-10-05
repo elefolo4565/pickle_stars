@@ -160,6 +160,8 @@ export class Input {
       el.setPointerCapture?.(e.pointerId);
       el.classList.add('down');
       if (this.enabled && auto) {
+        // 画面のボタンで打つ人にはオート打ち返しを使う (キーボードを押すと切れる)
+        this.autoHit = true;
         this.autoShot = shot;
         this.markAutoShot();
       }

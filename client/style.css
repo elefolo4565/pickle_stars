@@ -319,6 +319,7 @@ html, body {
 /* PC とタッチ端末の出し分け */
 body:not(.touch) .only-touch { display: none !important; }
 body.touch .only-desktop { display: none !important; }
+body.real-touch .only-pc { display: none !important; }
 
 @keyframes pop { from { transform: scale(0.6); opacity: 0; } to { transform: scale(1); opacity: 1; } }
 @keyframes bounce { from { transform: translateY(0); } to { transform: translateY(-14px); } }
