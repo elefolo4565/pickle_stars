@@ -21,10 +21,11 @@ export class Input {
     this.divePress = false;
     this.lastShot = SHOT.DRIVE; // 飛びつくときに使うショット (最後に押したもの)
     this.enabled = true;
-    // スマホ用オート打ち返し: 最後に押したショットボタンを覚えておき、打てる位置に来たら自動で打つ
+    // オート打ち返し: 最後に押したショットを覚えておき、打てる位置に来たら自動で打つ
     this.autoHit = false;
     this.autoShot = SHOT.DRIVE;
-    this.shotButtons = new Map();
+    /** @type {Map<string, HTMLElement[]>} オートのショットに印を付ける要素 (ボタン・キー表示) */
+    this.shotMarks = new Map();
 
     window.addEventListener('keydown', (e) => {
       if (e.target instanceof HTMLInputElement) return;
@@ -32,10 +33,7 @@ export class Input {
       if (e.repeat) return;
       this.keys.add(e.code);
       const s = KEY_SHOT[e.code];
-      if (s) {
-        this.setAutoHit(false); // キーボードで打つ人にはオートを使わない
-        this.press(s);
-      }
+      if (s) this.press(s);
       if (KEY_DIVE.has(e.code)) this.pressDive();
       if (/^Digit[1-8]$/.test(e.code)) this.emotePress = Number(e.code.slice(5)) - 1;
     });
@@ -52,6 +50,10 @@ export class Input {
 
   press(shot) {
     if (!this.enabled) return;
+    if (this.autoShot !== shot) {
+      this.autoShot = shot;
+      this.markAutoShot();
+    }
     this.presses.push(shot);
     this.held.add(shot);
     this.lastShot = shot;
@@ -78,7 +80,17 @@ export class Input {
 
   /** オートで打つショットのボタンに印を付ける */
   markAutoShot() {
-    for (const [shot, el] of this.shotButtons) el.classList.toggle('auto', this.autoHit && shot === this.autoShot);
+    for (const [shot, els] of this.shotMarks) {
+      for (const el of els) el.classList.toggle('auto', this.autoHit && shot === this.autoShot);
+    }
+  }
+
+  /** オートのショットになったら印 (auto クラス) を付ける要素を登録する */
+  addShotMark(el, shot) {
+    const list = this.shotMarks.get(shot) || [];
+    list.push(el);
+    this.shotMarks.set(shot, list);
+    this.markAutoShot();
   }
 
   /** バーチャルスティックを要素に取り付ける */
@@ -147,18 +159,11 @@ export class Input {
 
   /** ショットボタンを取り付ける */
   attachButton(el, shot) {
-    this.shotButtons.set(shot, el);
-    this.markAutoShot();
+    this.addShotMark(el, shot);
     el.addEventListener('pointerdown', (e) => {
       e.preventDefault();
       el.setPointerCapture?.(e.pointerId);
       el.classList.add('down');
-      if (this.enabled) {
-        // 画面のボタンで打つ人にはオート打ち返しを使う (キーボードを押すと切れる)
-        this.autoHit = true;
-        this.autoShot = shot;
-        this.markAutoShot();
-      }
       this.press(shot);
     });
     const up = () => {

@@ -384,10 +384,24 @@ EMOJIS.forEach((e, i) => {
 });
 $('btn-emote').addEventListener('click', () => emoteMenu.classList.toggle('hidden'));
 
-// タッチ操作 (スマホではオート打ち返しを使う)。PC でも「ボタン操作」を ON にすると同じ画面ボタンで遊べる
+// オート打ち返し (PC・スマホ共通。タイトル画面で切り替え)
+input.setAutoHit(load('ps_auto', '1') !== '0');
+function updateAutoBtn() {
+  $('btn-auto').textContent = `自動打ち返し: ${input.autoHit ? 'ON' : 'OFF'}`;
+}
+updateAutoBtn();
+$('btn-auto').addEventListener('click', () => {
+  input.setAutoHit(!input.autoHit);
+  save('ps_auto', input.autoHit ? '1' : '0');
+  updateAutoBtn();
+});
+document.querySelectorAll('.kb-help [data-shot]').forEach((el) => {
+  input.addShotMark(/** @type {HTMLElement} */ (el), SHOT[/** @type {HTMLElement} */ (el).dataset.shot]);
+});
+
+// タッチ操作。PC でも「ボタン操作」を ON にすると同じ画面ボタンで遊べる
 function setTouchUi(on) {
   document.body.classList.toggle('touch', on);
-  input.setAutoHit(on);
   $('btn-touchui').textContent = `ボタン操作: ${on ? 'ON' : 'OFF'}`;
 }
 setTouchUi(IS_TOUCH || load('ps_touchui', '0') === '1');

@@ -37,6 +37,7 @@
             <button class="btn gray small" id="btn-howto">あそびかた</button>
             <button class="btn gray small" id="btn-sound">効果音: ON</button>
             <button class="btn gray small" id="btn-bgm">BGM: ON</button>
+            <button class="btn gray small" id="btn-auto">自動打ち返し: ON</button>
             <button class="btn gray small only-touch" id="btn-full">全画面</button>
             <button class="btn gray small only-pc" id="btn-touchui">ボタン操作: OFF</button>
           </div>
@@ -132,6 +133,7 @@
             <tr><td>エモート</td><td>1〜8</td><td>右上の顔ボタン</td></tr>
           </table>
           <ul>
+            <li><b>自動打ち返し</b>（はじめはON）：ボールに近づくと、最後に押したショットで自動で打ち返します。いつ打つかを自分で決めたいときは、タイトル画面の「自動打ち返し」ボタンでOFFにできます。</li>
             <li>ボタンを押すと<b>構え</b>、ボールが届く範囲に来たら<b>一番いい打点で自動で打ちます</b>。押しっぱなしで構えを続けられます。</li>
             <li>打つ瞬間の移動方向で<b>狙い</b>が変わります（左右＝コース、前＝深く、後ろ＝浅く）。相手の打球が来ている間は、相手コートに出る<b>青い輪</b>が今の狙いの着地点です。サイドラインぎりぎりを狙うほどアウトのリスクも上がります。</li>
             <li>届かないボールも、構えていれば<b>飛びついて</b>返せます（少し遠くまで届く）。ただし当たりは悪くなり、起き上がるまで少し動けません。</li>
@@ -205,7 +207,7 @@
         <button class="shot drive" id="shot-drive">強打</button>
         <button class="shot dive" id="shot-dive">ダイブ</button>
       </div>
-      <div class="kb-help only-desktop">移動 WASD　<b class="c-red">J</b> 強打　<b class="c-blue">K</b> ソフト　<b class="c-yellow">L</b> ロブ　<b>Shift</b> ダイブ　(長押しで構え続ける)</div>
+      <div class="kb-help only-desktop">移動 WASD　<span data-shot="DRIVE"><b class="c-red">J</b> 強打</span>　<span data-shot="SOFT"><b class="c-blue">K</b> ソフト</span>　<span data-shot="LOB"><b class="c-yellow">L</b> ロブ</span>　<b>Shift</b> ダイブ　(長押しで構え続ける)</div>
     </section>
 
     <div id="toast" class="toast hidden"></div>
