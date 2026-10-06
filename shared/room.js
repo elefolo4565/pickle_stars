@@ -55,7 +55,7 @@ export class Room {
   }
 
   start() {
-    this.match = new Match(this.opts);
+    this.match = new Match({ ...this.opts, chars: this.members.map((m) => m.char | 0) });
     this.startTime = this.now();
     this.rematch = [false, false];
     for (const m of this.members) if (m && m.bot) m.bot = new Bot(m.bot.idx, m.bot.level);

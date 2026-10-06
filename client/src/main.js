@@ -1,6 +1,6 @@
 // アプリ全体の流れ: タイトル → マッチング → 試合 → 結果
 import { GameScene, IS_TOUCH, MENU_CHAR_Z } from './scene.js';
-import { Chibi, CHARACTERS, EMOJIS } from './characters.js';
+import { Chibi, CHARACTERS, EMOJIS, preloadModels } from './characters.js';
 import { Input } from './input.js';
 import { NetConnection, LocalConnection } from './net.js';
 import { GameSession } from './game.js';
@@ -8,9 +8,10 @@ import { Hud, Modal, initSegs, segValue, toast } from './hud.js';
 import { unlockAudio, sfx, setSound, soundOn } from './audio.js';
 import { music } from './music.js';
 import { SHOT } from '@shared/constants.js';
+import { CHAR_STATS } from '@shared/stats.js';
 
 const $ = (id) => document.getElementById(id);
-if (IS_TOUCH) document.body.classList.add('touch');
+if (IS_TOUCH) document.body.classList.add('real-touch');
 
 function load(key, def) {
   try {
@@ -62,11 +63,13 @@ function showMenuChar() {
   ch.root.position.set(0, 0, MENU_CHAR_Z);
   scene.scene.add(ch.root);
   state.menuChar = ch;
-  ch.setMood('win');
   const def = CHARACTERS[state.charIdx];
+  if (!def.calmMenu) ch.setMood('win');
   $('char-name').textContent = def.name;
   $('char-title').textContent = def.title;
   $('char-desc').textContent = def.desc;
+  const cs = CHAR_STATS[state.charIdx];
+  $('char-stats').textContent = cs.weak ? `得意: ${cs.good} / 苦手: ${cs.weak}` : `得意: ${cs.good}`;
   save('ps_char', String(state.charIdx));
 }
 
@@ -332,10 +335,40 @@ function backToMenu(sendLeave) {
   music.play('menu');
 }
 
-$('btn-exit').addEventListener('click', () => {
-  const msg = state.conn && state.conn.online ? '試合をやめてメニューに戻りますか？（相手の勝ちになります）' : '試合をやめてメニューに戻りますか？';
-  if (state.session && !state.session.over && !confirm(msg)) return;
-  backToMenu(true);
+// 試合をやめる確認 (CPU 戦は開いている間だけ一時停止。オンラインは止められない)
+function openQuit() {
+  if (!state.session || state.session.over) {
+    backToMenu(true);
+    return;
+  }
+  const online = !!(state.conn && state.conn.online);
+  $('quit-msg').innerHTML = online
+    ? 'メニューにもどると、相手の勝ちになります。<span class="quit-note">※ 試合はこのまま続いています</span>'
+    : 'メニューにもどりますか？<span class="quit-note">試合は一時停止しています</span>';
+  input.clear();
+  state.conn?.setPaused?.(true);
+  $('emote-menu').classList.add('hidden');
+  modal.open('pnl-quit');
+  sfx.click();
+}
+
+function closeQuit() {
+  if (!modal.isOpen('pnl-quit')) return;
+  modal.close();
+  input.clear();
+  state.conn?.setPaused?.(false);
+}
+
+$('btn-exit').addEventListener('click', openQuit);
+$('btn-quit-no').addEventListener('click', () => {
+  sfx.click();
+  closeQuit();
+});
+$('btn-quit-yes').addEventListener('click', () => backToMenu(true));
+document.addEventListener('keydown', (e) => {
+  if (e.code !== 'Escape' || state.mode !== 'game' || e.repeat) return;
+  if (modal.isOpen('pnl-quit')) closeQuit();
+  else if (!modal.current) openQuit();
 });
 
 // エモート
@@ -366,7 +399,17 @@ document.querySelectorAll('.kb-help [data-shot]').forEach((el) => {
   input.addShotMark(/** @type {HTMLElement} */ (el), SHOT[/** @type {HTMLElement} */ (el).dataset.shot]);
 });
 
-// タッチ操作
+// タッチ操作。PC でも「ボタン操作」を ON にすると同じ画面ボタンで遊べる
+function setTouchUi(on) {
+  document.body.classList.toggle('touch', on);
+  $('btn-touchui').textContent = `ボタン操作: ${on ? 'ON' : 'OFF'}`;
+}
+setTouchUi(IS_TOUCH || load('ps_touchui', '0') === '1');
+$('btn-touchui').addEventListener('click', () => {
+  const on = !document.body.classList.contains('touch');
+  save('ps_touchui', on ? '1' : '0');
+  setTouchUi(on);
+});
 input.attachJoystick($('touch-zone'), $('joy-base'), $('joy-knob'));
 input.attachButton($('shot-drive'), SHOT.DRIVE);
 input.attachButton($('shot-soft'), SHOT.SOFT);
@@ -380,14 +423,16 @@ function frame(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   if (state.mode === 'game' && state.session) {
-    state.conn?.update();
-    state.session?.update(dt);
+    if (!state.conn?.paused) {
+      state.conn?.update();
+      state.session?.update(dt);
+    }
   } else {
     menuTime += dt;
     if (state.menuChar) {
       state.menuChar.root.rotation.y = Math.sin(menuTime * 0.7) * 0.5;
       state.menuChar.update(dt, 0);
-      if (!state.menuChar.mood && Math.random() < dt * 0.3) state.menuChar.strike(['fh', 'bh', 'oh'][Math.floor(Math.random() * 3)]);
+      if (!state.menuChar.def.calmMenu && !state.menuChar.mood && Math.random() < dt * 0.3) state.menuChar.strike(['fh', 'bh', 'oh'][Math.floor(Math.random() * 3)]);
     }
     scene.updateMenuCamera(dt, menuTime);
   }
@@ -395,6 +440,7 @@ function frame(now) {
 }
 scene.renderer.setAnimationLoop(frame);
 
+preloadModels();
 showMenuChar();
 music.play('menu');
 

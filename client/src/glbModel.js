@@ -2,11 +2,10 @@
 import * as THREE from 'three';
 import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
 import { clone as cloneSkinned } from 'three/addons/utils/SkeletonUtils.js';
-import { outlineMat } from './toon.js';
 
 // テクスチャに陰影が描き込まれているので、影は他のキャラより薄くする
 const softGradient = (() => {
-  const tex = new THREE.DataTexture(new Uint8Array([190, 225, 255]), 3, 1, THREE.RedFormat);
+  const tex = new THREE.DataTexture(new Uint8Array([225, 245, 255]), 3, 1, THREE.RedFormat);
   tex.minFilter = THREE.NearestFilter;
   tex.magFilter = THREE.NearestFilter;
   tex.generateMipmaps = false;
@@ -14,14 +13,55 @@ const softGradient = (() => {
   return tex;
 })();
 
+/**
+ * 体のまわりの黒い輪郭線 (他のキャラと同じく、少し太らせた裏面を黒で描く)。
+ * 細かい凹凸の多いモデルなので、輪郭線を奥へずらして顔などの内側に線が出ないようにする
+ */
+function silhouetteMat(width, depthBias) {
+  const m = new THREE.MeshBasicMaterial({ color: 0x1b1424, side: THREE.BackSide });
+  m.onBeforeCompile = (sh) => {
+    sh.vertexShader = sh.vertexShader
+      .replace('#include <begin_vertex>', `vec3 transformed = position + normalize(normal) * ${width.toFixed(4)};`)
+      .replace('#include <project_vertex>', `#include <project_vertex>\n  gl_Position.z += ${depthBias.toFixed(4)} * gl_Position.w;`);
+  };
+  m.customProgramCacheKey = () => `glbOutline${width}|${depthBias}`;
+  return m;
+}
+
+/** 同じ位置の頂点の法線を平均した形 (UV の切れ目で輪郭線が割れないように) */
+function smoothNormalsGeometry(geo) {
+  const g = geo.clone();
+  const pos = g.attributes.position;
+  const nrm = g.attributes.normal;
+  const sum = new Map();
+  const key = (i) => `${pos.getX(i).toFixed(4)},${pos.getY(i).toFixed(4)},${pos.getZ(i).toFixed(4)}`;
+  const v = new THREE.Vector3();
+  for (let i = 0; i < pos.count; i++) {
+    const k = key(i);
+    v.fromBufferAttribute(nrm, i);
+    const s = sum.get(k);
+    if (s) s.add(v);
+    else sum.set(k, v.clone());
+  }
+  const out = new Float32Array(pos.count * 3);
+  for (let i = 0; i < pos.count; i++) {
+    const s = sum.get(key(i)).clone().normalize();
+    out[i * 3] = s.x;
+    out[i * 3 + 1] = s.y;
+    out[i * 3 + 2] = s.z;
+  }
+  g.setAttribute('normal', new THREE.BufferAttribute(out, 3));
+  return g;
+}
+
 const loader = new GLTFLoader();
 const cache = new Map();
 
 /**
- * 読み込みは 1 回だけ。マテリアルはトゥーン調に置き換える。
- * outline を指定すると輪郭線用のメッシュを足す (細かい凹凸の多いモデルだと顔に線が出るので注意)
+ * 読み込みは 1 回だけ。マテリアルはトゥーン調に置き換え、輪郭線用のメッシュを足す。
+ * outline はモデルの元の大きさでの線の太さ (0 なら線なし)
  */
-export function loadModel(url, outline = 0) {
+export function loadModel(url, outline = 0.011) {
   let p = cache.get(url);
   if (!p) {
     p = loader.loadAsync(url).then((gltf) => {
@@ -41,7 +81,7 @@ export function loadModel(url, outline = 0) {
         old.dispose();
         m.frustumCulled = false;
         if (!outline) continue;
-        const ol = new THREE.SkinnedMesh(m.geometry, outlineMat(outline));
+        const ol = new THREE.SkinnedMesh(smoothNormalsGeometry(m.geometry), silhouetteMat(outline, 0.004));
         ol.position.copy(m.position);
         ol.quaternion.copy(m.quaternion);
         ol.scale.copy(m.scale);

@@ -3,15 +3,17 @@ import {
   DT, MOVE_SPEED, KITCHEN, COURT_HALF_L, SHOT, DIVE_RECOVER, forwardSign, sideOf,
 } from './constants.js';
 import { cloneRally, stepRally, hitBlockReason, inReach } from './rally.js';
-import { rightSign } from './shot.js';
+import { rightSign, shotKind } from './shot.js';
 import { clampPlayer } from './match.js';
 
 // 強さの設定。speed: 移動速度の倍率 / reaction: 反応までの tick 数 / aimNoise: 狙いのブレ
 // posNoise: 立ち位置のブレ / whiff: 空振りの確率 / netRush: ネットに詰める確率 / dive: 飛びつくか
+// lowDrive: 低い球でも強打してしまう割合
+// drive: 強打を選ぶ割合の倍率 (弱い CPU は速い球をあまり打たない)
 const LEVELS = [
-  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25, dive: false },
-  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5, dive: true },
-  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8, dive: true },
+  { speed: 0.62, reaction: 20, aimNoise: 0.6, aimMax: 1.0, posNoise: 0.6, whiff: 0.12, netRush: 0.25, dive: false, lowDrive: 1, drive: 0.45 },
+  { speed: 0.78, reaction: 14, aimNoise: 0.45, aimMax: 0.95, posNoise: 0.46, whiff: 0.06, netRush: 0.5, dive: true, lowDrive: 0.5, drive: 0.8 },
+  { speed: 0.9, reaction: 9, aimNoise: 0.32, aimMax: 0.9, posNoise: 0.38, whiff: 0.03, netRush: 0.8, dive: true, lowDrive: 0.15, drive: 1 },
 ];
 
 function rand(a, b) {
@@ -82,14 +84,15 @@ export class Bot {
         tz = this.plan.z;
       }
       // 打てるなら打つ
-      if (!this.whiff && hitBlockReason(r, this.idx, pl.x, pl.z) === null) {
-        const due = !this.plan || m.tick >= this.plan.tick - 1 || !this.willStayInReach(r, pl);
+      const st = m.stats[this.idx];
+      if (!this.whiff && hitBlockReason(r, this.idx, pl.x, pl.z, false, st) === null) {
+        const due = !this.plan || m.tick >= this.plan.tick - 1 || !this.willStayInReach(r, pl, false, st);
         if (due) this.doHit(m, pl);
-      } else if (!this.whiff && this.cfg.dive && hitBlockReason(r, this.idx, pl.x, pl.z, true) === null
-        && !this.willStayInReach(r, pl, true)) {
+      } else if (!this.whiff && this.cfg.dive && hitBlockReason(r, this.idx, pl.x, pl.z, true, st) === null
+        && !this.willStayInReach(r, pl, true, st)) {
         // 間に合わない: 届く範囲から出ていく直前に飛びつく
         this.doHit(m, pl, true);
-        this.recoverUntil = m.tick + Math.round(DIVE_RECOVER / DT);
+        this.recoverUntil = m.tick + Math.round((DIVE_RECOVER * st.recover) / DT);
         return;
       }
     } else if (m.phase === 'rally') {
@@ -113,18 +116,18 @@ export class Bot {
     this.moveToward(m, pl, tx, tz);
   }
 
-  willStayInReach(r, pl, dive = false) {
+  willStayInReach(r, pl, dive, st) {
     const s = cloneRally(r);
     stepRally(s);
     stepRally(s);
-    return inReach(s, this.idx, pl.x, pl.z, dive) && s.bounces < 2;
+    return inReach(s, this.idx, pl.x, pl.z, dive, st) && s.bounces < 2;
   }
 
   moveToward(m, pl, tx, tz) {
     const dx = tx - pl.x;
     const dz = tz - pl.z;
     const d = Math.hypot(dx, dz);
-    const step = MOVE_SPEED * this.cfg.speed * DT;
+    const step = MOVE_SPEED * this.cfg.speed * m.stats[this.idx].speed * DT;
     let nx = tx;
     let nz = tz;
     if (d > step) {
@@ -141,7 +144,8 @@ export class Bot {
   makePlan(m) {
     const r = cloneRally(m.rally);
     const pl = m.players[this.idx];
-    const speed = MOVE_SPEED * this.cfg.speed;
+    const st = m.stats[this.idx];
+    const speed = MOVE_SPEED * this.cfg.speed * st.speed;
     const f = forwardSign(this.idx);
     const reactT = this.cfg.reaction * DT;
     let best = null;
@@ -157,8 +161,8 @@ export class Bot {
       const y = r.p[1];
       if (y < 0.2 || y > 2.2) continue;
       // ボールを利き手側 (右) に置く位置に立つ
-      const sx = r.p[0] - rightSign(this.idx) * side;
-      const sz = r.p[2] - f * back;
+      const sx = r.p[0] - rightSign(this.idx) * side * st.reach;
+      const sz = r.p[2] - f * back * st.reach;
       if (r.bounces === 0 && Math.abs(sz) < KITCHEN + 0.05) continue;
       const need = Math.hypot(sx - pl.x, sz - pl.z) / speed + reactT;
       const late = need - t * DT;
@@ -178,12 +182,14 @@ export class Bot {
     const opp = m.players[1 - this.idx];
     const myDepth = Math.abs(pl.z);
     const oppDepth = Math.abs(opp.z);
+    // 低い球の強打は浮いてしまうので、強い CPU ほど避ける
+    const d = this.cfg.drive * (shotKind(SHOT.DRIVE, r.p) === 'pop' ? this.cfg.lowDrive : 1);
     let shot;
     if (r.p[1] > 1.5) shot = SHOT.DRIVE;
-    else if (r.hitCount === 2 && myDepth > 4.5) shot = pick({ [SHOT.SOFT]: 5, [SHOT.DRIVE]: 4, [SHOT.LOB]: 1 });
-    else if (myDepth < 3.6 && oppDepth < 3.6) shot = pick({ [SHOT.SOFT]: 6, [SHOT.DRIVE]: 3, [SHOT.LOB]: 1 });
-    else if (oppDepth < 3.6) shot = pick({ [SHOT.LOB]: 2, [SHOT.SOFT]: 4, [SHOT.DRIVE]: 4 });
-    else shot = pick({ [SHOT.DRIVE]: 6, [SHOT.SOFT]: 2, [SHOT.LOB]: 1.5 });
+    else if (r.hitCount === 2 && myDepth > 4.5) shot = pick({ [SHOT.SOFT]: 5, [SHOT.DRIVE]: 4 * d, [SHOT.LOB]: 1 });
+    else if (myDepth < 3.6 && oppDepth < 3.6) shot = pick({ [SHOT.SOFT]: 6, [SHOT.DRIVE]: 3 * d, [SHOT.LOB]: 1 });
+    else if (oppDepth < 3.6) shot = pick({ [SHOT.LOB]: 2, [SHOT.SOFT]: 4, [SHOT.DRIVE]: 4 * d });
+    else shot = pick({ [SHOT.DRIVE]: 6 * d, [SHOT.SOFT]: 2, [SHOT.LOB]: 1.5 });
 
     // 相手のいない側を狙う (自分視点の左右に変換)
     const oppViewX = opp.x * rightSign(this.idx);

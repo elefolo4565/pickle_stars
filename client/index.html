@@ -39,6 +39,7 @@
             <button class="btn gray small" id="btn-bgm">BGM: ON</button>
             <button class="btn gray small" id="btn-auto">自動打ち返し: ON</button>
             <button class="btn gray small only-touch" id="btn-full">全画面</button>
+            <button class="btn gray small only-pc" id="btn-touchui">ボタン操作: OFF</button>
           </div>
         </div>
       </div>
@@ -49,6 +50,7 @@
             <div class="char-title" id="char-title"></div>
             <div class="char-name" id="char-name"></div>
             <div class="char-desc" id="char-desc"></div>
+            <div class="char-stats" id="char-stats"></div>
           </div>
           <button class="arrow" id="char-next" aria-label="次のキャラ">▶</button>
         </div>
@@ -138,6 +140,7 @@
             <li><b>ダイブ</b>ボタンで、好きなタイミングで飛びつけます（移動している方向へ。止まっていればボールの方へ）。飛びついた直後にボールが届けば、最後に選んだショットで打ち返します。空振りすると起き上がるまで動けないので注意！</li>
             <li>ボールの横（体から少し離れた位置）で打つと<b>ナイスショット</b>。近すぎ・遠すぎ・低すぎると打球が乱れます。</li>
             <li>高いボールを強打すると<b>スマッシュ</b>！ ソフトはネット際に落とすドロップ/ディンク、ロブは相手の頭上を越える高い球です。</li>
+            <li><b>強打の弱点</b>：ネットの近くで低い球（ひざより下）を強打すると、ふわっと浮いて相手のスマッシュのチャンスになります。ネット際の低い球はソフトで返しましょう。</li>
             <li>黄色い輪は、相手の打球の<b>着地予想地点</b>です。</li>
           </ul>
           <h3>ルール（ピックルボール）</h3>
@@ -151,6 +154,16 @@
         </div>
         <div class="row">
           <button class="btn green" data-close>わかった！</button>
+        </div>
+      </div>
+
+      <div class="panel quit" id="pnl-quit">
+        <svg class="quit-ball" viewBox="0 0 100 100" aria-hidden="true"><circle cx="50" cy="50" r="44" fill="#e9ff3b" stroke="#1b1424" stroke-width="8"/><circle cx="38" cy="36" r="6" fill="#1b1424"/><circle cx="62" cy="36" r="6" fill="#1b1424"/><circle cx="34" cy="62" r="6" fill="#1b1424"/><circle cx="66" cy="62" r="6" fill="#1b1424"/></svg>
+        <h2>試合をやめる？</h2>
+        <p id="quit-msg"></p>
+        <div class="row">
+          <button class="btn green" id="btn-quit-no">つづける</button>
+          <button class="btn red" id="btn-quit-yes">やめる</button>
         </div>
       </div>
 

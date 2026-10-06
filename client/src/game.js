@@ -11,6 +11,7 @@ import {
 } from '@shared/rally.js';
 import { clampPlayer } from '@shared/match.js';
 import { rightSign, aimPoint } from '@shared/shot.js';
+import { statsOf } from '@shared/stats.js';
 import { Chibi } from './characters.js';
 import { makeBlob, makeRing } from './scene.js';
 import { sfx } from './audio.js';
@@ -115,6 +116,7 @@ export class GameSession {
     this.tmpV = new THREE.Vector3();
     this.events = [];
     this.time = 0;
+    this.myStats = statsOf(this.players[this.you].char);
 
     hud.setPlayers(this.players[this.you], this.players[this.opp], this.opts);
     hud.setScore(0, 0, null);
@@ -347,7 +349,7 @@ export class GameSession {
     const shot = this.swingWin ? this.swingWin.shot : this.input.autoHit ? this.input.autoShot : this.input.lastShot;
     this.diveWin = { shot, until: now + DIVE_WINDOW * 1000 };
     this.swingWin = null;
-    me.recoverUntil = now + DIVE_RECOVER * 1000;
+    me.recoverUntil = now + DIVE_RECOVER * this.myStats.recover * 1000;
     me.vx = me.vz = 0;
     this.chars[this.you].dive(wx, wz, swingKind(this.you, r.p, me.x));
     this.conn.send({ t: 'dv' });
@@ -361,7 +363,7 @@ export class GameSession {
     if (!dw || this.phase !== 'rally' || !this.sim) return;
     const r = this.sim.rally;
     const me = this.me;
-    const reason = hitBlockReason(r, this.you, me.x, me.z, true);
+    const reason = hitBlockReason(r, this.you, me.x, me.z, true, this.myStats);
     if ((reason === 'twobounce' || reason === 'kitchen') && this.hintSeq !== r.seq) {
       this.hintSeq = r.seq;
       this.hud.feedback(reason === 'twobounce' ? 'ツーバウンドルール! 1回バウンドさせよう' : 'キッチンではボレーできない!', 'warn');
@@ -382,7 +384,7 @@ export class GameSession {
       && performance.now() >= this.me.recoverUntil) {
       const r = this.sim.rally;
       const { x, z } = this.me;
-      if (!hitBlockReason(r, this.you, x, z) || (this.diveNow(r) && !this.goingOut(r))) {
+      if (!hitBlockReason(r, this.you, x, z, false, this.myStats) || (this.diveNow(r) && !this.goingOut(r))) {
         this.startSwing(this.input.autoShot || SHOT.DRIVE, performance.now(), true);
       }
     }
@@ -391,9 +393,9 @@ export class GameSession {
     if (performance.now() < this.me.recoverUntil) return;
     const r = this.sim.rally;
     const me = this.me;
-    let reason = hitBlockReason(r, this.you, me.x, me.z);
+    let reason = hitBlockReason(r, this.you, me.x, me.z, false, this.myStats);
     let dive = false;
-    if (reason === 'reach' && !hitBlockReason(r, this.you, me.x, me.z, true)) {
+    if (reason === 'reach' && !hitBlockReason(r, this.you, me.x, me.z, true, this.myStats)) {
       // 普通には届かない球: 飛びつけば届く範囲から出ていく直前まで待ってから飛びつく
       if (!this.diveNow(r)) return;
       if (sw.auto && this.goingOut(r)) return;
@@ -405,12 +407,12 @@ export class GameSession {
       this.hud.feedback(reason === 'twobounce' ? 'ツーバウンドルール! 1回バウンドさせよう' : 'キッチンではボレーできない!', 'warn');
     }
     if (reason) return;
-    const q = contactQuality(r, me.x, me.z);
+    const q = contactQuality(r, me.x, me.z, this.myStats);
     if (!dive && q < 0.97) {
       // 次の tick の方が良い打点なら待つ
       const nxt = cloneRally(r);
       stepRally(nxt);
-      if (!hitBlockReason(nxt, this.you, me.x, me.z) && contactQuality(nxt, me.x, me.z) > q + 1e-4) return;
+      if (!hitBlockReason(nxt, this.you, me.x, me.z, false, this.myStats) && contactQuality(nxt, me.x, me.z, this.myStats) > q + 1e-4) return;
     }
     this.swingWin = null;
     this.doHit(sw.shot, dive, dive);
@@ -427,7 +429,7 @@ export class GameSession {
     const aim = this.input.getMove();
     const kind = swingKind(this.you, r.p, me.x);
     const [wx, wz] = diveVec(r.p, me.x, me.z);
-    const res = applyHit(r, this.you, shot, aim.x, aim.y, me.x, me.z, dive);
+    const res = applyHit(r, this.you, shot, aim.x, aim.y, me.x, me.z, dive, this.myStats);
     this.conn.send({
       t: 'hit', k: this.sim.tick, s: shot, ax: aim.x, ay: aim.y, x: me.x, z: me.z, q: r.seq, dv: dive ? 1 : 0,
     });
@@ -436,7 +438,7 @@ export class GameSession {
     if (dive) {
       if (startDive) {
         this.chars[this.you].dive(wx, wz, kind);
-        me.recoverUntil = performance.now() + DIVE_RECOVER * 1000;
+        me.recoverUntil = performance.now() + DIVE_RECOVER * this.myStats.recover * 1000;
         me.vx = me.vz = 0;
       } else {
         this.chars[this.you].strike(kind);
@@ -446,6 +448,7 @@ export class GameSession {
     }
     this.chars[this.you].strike(kind);
     if (res.kind === 'smash') this.hud.feedback('スマッシュ!', 'good');
+    else if (res.kind === 'pop') this.hud.feedback('低い球の強打は浮いちゃう…', 'warn');
     else if (res.quality >= 0.97) this.hud.feedback('ナイスショット!', 'good');
     else if (res.quality < 0.6) this.hud.feedback('打点が悪い…', 'warn');
   }
@@ -461,8 +464,8 @@ export class GameSession {
     // 移動
     const mv = input.getMove();
     const canMove = !this.over && this.phase !== 'gameOver' && now >= me.recoverUntil;
-    const tvx = canMove ? mv.x * rightSign(this.you) * MOVE_SPEED : 0;
-    const tvz = canMove ? mv.y * forwardSign(this.you) * MOVE_SPEED : 0;
+    const tvx = canMove ? mv.x * rightSign(this.you) * MOVE_SPEED * this.myStats.speed : 0;
+    const tvz = canMove ? mv.y * forwardSign(this.you) * MOVE_SPEED * this.myStats.speed : 0;
     const a = MOVE_ACCEL * dt;
     me.vx += Math.max(-a, Math.min(a, tvx - me.vx));
     me.vz += Math.max(-a, Math.min(a, tvz - me.vz));
@@ -540,7 +543,7 @@ export class GameSession {
       }
     }
     const sp = dt > 0 ? Math.hypot(r.x - px, r.z - pz) / dt : 0;
-    r.speed += (Math.min(sp, MOVE_SPEED * 1.2) - r.speed) * Math.min(1, dt * 12);
+    r.speed += (Math.min(sp, MOVE_SPEED * statsOf(this.players[this.opp].char).speed * 1.2) - r.speed) * Math.min(1, dt * 12);
   }
 
   /** 相手の打球の着地予想 (打球ごとに 1 回だけ計算) */
@@ -556,10 +559,10 @@ export class GameSession {
   /** 飛びつけば届き、次の tick にはもう届かない (飛びつくなら今) */
   diveNow(r) {
     const me = this.me;
-    if (hitBlockReason(r, this.you, me.x, me.z, true)) return false;
+    if (hitBlockReason(r, this.you, me.x, me.z, true, this.myStats)) return false;
     const nxt = cloneRally(r);
     stepRally(nxt);
-    return !!hitBlockReason(nxt, this.you, me.x + me.vx * DT, me.z + me.vz * DT, true);
+    return !!hitBlockReason(nxt, this.you, me.x + me.vx * DT, me.z + me.vz * DT, true, this.myStats);
   }
 
   /** 相手の打球がノーバウンドのままアウトになりそうか */
@@ -603,7 +606,7 @@ export class GameSession {
       this.visOff.multiplyScalar(Math.exp(-dt * 12));
       this.ballDisp.add(this.visOff);
       const speed = Math.hypot(r.v[0], r.v[1], r.v[2]);
-      sc.setBall(this.ballDisp.x, Math.max(this.ballDisp.y, 0.037), this.ballDisp.z, true, speed);
+      sc.setBall(this.ballDisp.x, Math.max(this.ballDisp.y, 0.037), this.ballDisp.z, true, speed, r.kind);
     } else {
       sc.setBall(0, 0, 0, false, 0);
     }
@@ -627,7 +630,7 @@ export class GameSession {
     if (incoming && !this.over) {
       const mv = this.input.getMove();
       const shot = this.swingWin ? this.swingWin.shot : this.input.autoHit ? this.input.autoShot : SHOT.DRIVE;
-      const [ax, az] = aimPoint(this.you, shot, mv.x, mv.y, r.p[1]);
+      const [ax, az] = aimPoint(this.you, shot, mv.x, mv.y, r.p);
       mark.position.set(ax, 0.014, az);
       mark.material.opacity = this.swingWin ? 0.95 : 0.5;
       mark.scale.setScalar(this.swingWin ? 1 + Math.sin(this.time * 14) * 0.06 : 0.9);

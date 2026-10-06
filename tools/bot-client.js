@@ -11,6 +11,7 @@ import { performance } from 'node:perf_hooks';
 import { DT, DT_MS } from '../shared/constants.js';
 import { cloneRally, stepRally, applyHit } from '../shared/rally.js';
 import { Bot } from '../shared/ai.js';
+import { statsOf } from '../shared/stats.js';
 
 const SERVER = process.env.SERVER || 'ws://localhost:3000/ws';
 const LAG = Number(process.env.LAG) || 0;
@@ -106,6 +107,7 @@ function startGame(start) {
       phaseTime: 0,
       rally: null,
       players: [{ x: 0, z: 0, ry: 0 }, { x: 0, z: 0, ry: 0 }],
+      stats: start.players.map((p) => statsOf(p.char)),
       serve(i, shot, ax, ay) {
         send({ t: 'srv', s: shot, ax, ay });
         this.phaseTime = -999; // サーバーから状態が返るまで再送しない
@@ -113,7 +115,7 @@ function startGame(start) {
       },
       hit(i, tick, shot, ax, ay, px, pz) {
         send({ t: 'hit', k: tick, s: shot, ax, ay, x: px, z: pz });
-        applyHit(this.rally, i, shot, ax, ay, px, pz);
+        applyHit(this.rally, i, shot, ax, ay, px, pz, false, this.stats[i]);
         g.pendingSeq = this.rally.seq;
         g.pendingUntil = performance.now() + 800;
         stats.hits++;
